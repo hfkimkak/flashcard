@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import OpenAI from 'openai';
 
@@ -48,11 +48,11 @@ export default function Home() {
   const [saveCategory, setSaveCategory] = useState<'all' | 'new' | 'ok' | 'practice'>('all');
 
   // Touch handling için state'ler
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  // const [touchStart, setTouchStart] = useState<number | null>(null);
+  // const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   // Minimum kaydırma mesafesi
-  const minSwipeDistance = 50;
+  // const minSwipeDistance = 50;
 
   const openai = new OpenAI({
     apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
@@ -115,8 +115,8 @@ export default function Home() {
     }
   };
 
-  // Update existing list
-  const updateCurrentList = () => {
+  // Call updateCurrentList whenever cards change
+  const updateCurrentList = useCallback(() => {
     if (!currentListName) return;
     
     const updatedLists = savedLists.map(list => 
@@ -127,14 +127,13 @@ export default function Home() {
     
     setSavedLists(updatedLists);
     localStorage.setItem('wordLists', JSON.stringify(updatedLists));
-  };
+  }, [currentListName, cards, savedLists]);
 
-  // Call updateCurrentList whenever cards change
   useEffect(() => {
     if (currentListName && cards.length > 0) {
       updateCurrentList();
     }
-  }, [cards]);
+  }, [currentListName, cards, updateCurrentList]);
 
   const generateExampleSentence = async (word: string) => {
     try {
@@ -474,30 +473,6 @@ export default function Home() {
       card.english === word.english ? { ...card, status: newStatus } : card
     );
     setCards(updatedCards);
-  };
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-  };
-
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
-
-    if (isLeftSwipe) {
-      moveToNextCard(); // Sola kaydırma - sonraki kart
-    }
-    if (isRightSwipe) {
-      moveToPreviousCard(); // Sağa kaydırma - önceki kart
-    }
   };
 
   // Önceki karta geçiş fonksiyonu
