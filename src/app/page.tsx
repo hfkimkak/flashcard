@@ -249,36 +249,89 @@ export default function Home() {
   };
 
   const handleCardStatus = (status: 'ok' | 'practice') => {
-    const updatedCards = [...cards];
-    updatedCards[currentCardIndex] = {
-      ...updatedCards[currentCardIndex],
-      status: status
-    };
-    
-    setCards(updatedCards);
-    setShowSentence(false);
+    try {
+      // Kart listesi boşsa işlem yapma
+      if (cards.length === 0) return;
 
-    // Kartları filtreleyip bir sonraki kartı seçme
-    const availableCards = updatedCards.filter(card => card.status === studyMode);
-    const currentIndexInFiltered = availableCards.findIndex(
-      card => card.english === currentCard.english && card.turkish === currentCard.turkish
-    );
+      // Geçerli kart indeksi kontrolü
+      if (currentCardIndex < 0 || currentCardIndex >= cards.length) {
+        console.error('Invalid card index:', currentCardIndex);
+        return;
+      }
 
-    if (availableCards.length === 0) return;
+      const updatedCards = [...cards];
+      updatedCards[currentCardIndex] = {
+        ...updatedCards[currentCardIndex],
+        status: status
+      };
+      
+      setCards(updatedCards);
+      setShowSentence(false);
 
-    let nextIndex = currentIndexInFiltered + 1;
-    if (nextIndex >= availableCards.length) {
-      nextIndex = 0;
+      // Kartları filtreleyip bir sonraki kartı seçme
+      const availableCards = updatedCards.filter(card => card.status === studyMode);
+      
+      // Eğer mevcut modda hiç kart kalmadıysa, diğer moda geç
+      if (availableCards.length === 0) {
+        const otherMode = studyMode === 'new' ? 'practice' : 'new';
+        const otherModeCards = updatedCards.filter(card => card.status === otherMode);
+        
+        if (otherModeCards.length > 0) {
+          setStudyMode(otherMode);
+          const firstCard = otherModeCards[0];
+          const firstCardIndex = updatedCards.findIndex(card => 
+            card.english === firstCard.english && card.turkish === firstCard.turkish
+          );
+          
+          if (firstCardIndex !== -1) {
+            setCurrentCardIndex(firstCardIndex);
+            setCurrentCard(firstCard);
+          }
+        } else {
+          // Hiç kart kalmadıysa başlangıç durumuna dön
+          const defaultCard: Flashcard = {
+            english: 'Tüm kartlar tamamlandı',
+            turkish: 'Yeni bir liste yükleyin',
+            status: 'new' as const
+          };
+          setCurrentCard(defaultCard);
+          setCurrentCardIndex(0);
+        }
+        setIsFlipped(false);
+        return;
+      }
+
+      // Mevcut kartın filtrelenmiş listedeki indeksini bul
+      const currentIndexInFiltered = availableCards.findIndex(
+        card => card.english === currentCard.english && card.turkish === currentCard.turkish
+      );
+
+      // Bir sonraki kartın indeksini hesapla
+      let nextIndex = 0;
+      if (currentIndexInFiltered !== -1) {
+        nextIndex = (currentIndexInFiltered + 1) % availableCards.length;
+      }
+
+      // Bir sonraki kartı seç
+      const nextCard = availableCards[nextIndex];
+      if (nextCard) {
+        const nextCardIndex = updatedCards.findIndex(
+          card => card.english === nextCard.english && card.turkish === nextCard.turkish
+        );
+        if (nextCardIndex !== -1) {
+          setCurrentCardIndex(nextCardIndex);
+          setCurrentCard(nextCard);
+        }
+      }
+      setIsFlipped(false);
+    } catch (error) {
+      console.error('Error in handleCardStatus:', error);
+      // Hata durumunda güvenli bir duruma dön
+      if (cards.length > 0) {
+        setCurrentCard(cards[0]);
+        setCurrentCardIndex(0);
+      }
     }
-
-    const nextCard = availableCards[nextIndex];
-    const nextCardIndex = updatedCards.findIndex(
-      card => card.english === nextCard.english && card.turkish === nextCard.turkish
-    );
-
-    setCurrentCardIndex(nextCardIndex);
-    setCurrentCard(nextCard);
-    setIsFlipped(false);
   };
 
   const switchStudyMode = (mode: 'new' | 'practice') => {
