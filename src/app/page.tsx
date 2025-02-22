@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import OpenAI from 'openai';
 
@@ -20,6 +20,12 @@ interface ExcelRow {
   [key: string]: string | undefined;
 }
 
+interface SavedWordList {
+  name: string;
+  cards: Flashcard[];
+  createdAt: string;
+}
+
 export default function Home() {
   const [isFlipped, setIsFlipped] = useState(false);
   const [cards, setCards] = useState<Flashcard[]>([]);
@@ -28,16 +34,100 @@ export default function Home() {
   const [activeList, setActiveList] = useState<'new' | 'ok' | 'practice' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showSentence, setShowSentence] = useState(false);
+  const [savedLists, setSavedLists] = useState<SavedWordList[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [listName, setListName] = useState('');
+  const [currentListName, setCurrentListName] = useState<string | null>(null);
+  const [showAddWordForm, setShowAddWordForm] = useState(false);
+  const [newWord, setNewWord] = useState({ english: '', turkish: '' });
   const [currentCard, setCurrentCard] = useState<Flashcard>({
     english: 'Example',
     turkish: 'Örnek',
     status: 'new'
   });
+  const [saveCategory, setSaveCategory] = useState<'all' | 'new' | 'ok' | 'practice'>('all');
 
   const openai = new OpenAI({
     apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true
   });
+
+  // Load saved lists from localStorage on component mount
+  useEffect(() => {
+    const saved = localStorage.getItem('wordLists');
+    if (saved) {
+      setSavedLists(JSON.parse(saved));
+    }
+  }, []);
+
+  // Save current cards to localStorage
+  const saveCurrentList = () => {
+    if (!listName.trim()) return;
+
+    let cardsToSave = cards;
+    if (saveCategory === 'ok') {
+      cardsToSave = cards.filter(card => card.status === 'ok');
+    } else if (saveCategory === 'practice') {
+      cardsToSave = cards.filter(card => card.status === 'practice');
+    } else if (saveCategory === 'new') {
+      cardsToSave = cards.filter(card => card.status === 'new');
+    }
+
+    const newList: SavedWordList = {
+      name: listName,
+      cards: cardsToSave,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedLists = [...savedLists, newList];
+    setSavedLists(updatedLists);
+    localStorage.setItem('wordLists', JSON.stringify(updatedLists));
+    setShowSaveDialog(false);
+    setListName('');
+    setSaveCategory('all');
+    setCurrentListName(listName);
+  };
+
+  // Load a saved list
+  const loadSavedList = (list: SavedWordList) => {
+    setCards(list.cards);
+    if (list.cards.length > 0) {
+      setCurrentCard(list.cards[0]);
+      setCurrentCardIndex(0);
+    }
+    setCurrentListName(list.name);
+  };
+
+  // Delete a saved list
+  const deleteSavedList = (name: string) => {
+    const updatedLists = savedLists.filter(list => list.name !== name);
+    setSavedLists(updatedLists);
+    localStorage.setItem('wordLists', JSON.stringify(updatedLists));
+    if (currentListName === name) {
+      setCurrentListName(null);
+    }
+  };
+
+  // Update existing list
+  const updateCurrentList = () => {
+    if (!currentListName) return;
+    
+    const updatedLists = savedLists.map(list => 
+      list.name === currentListName 
+        ? { ...list, cards, updatedAt: new Date().toISOString() }
+        : list
+    );
+    
+    setSavedLists(updatedLists);
+    localStorage.setItem('wordLists', JSON.stringify(updatedLists));
+  };
+
+  // Call updateCurrentList whenever cards change
+  useEffect(() => {
+    if (currentListName && cards.length > 0) {
+      updateCurrentList();
+    }
+  }, [cards]);
 
   const generateExampleSentence = async (word: string) => {
     try {
@@ -160,10 +250,35 @@ export default function Home() {
 
   const handleCardStatus = (status: 'ok' | 'practice') => {
     const updatedCards = [...cards];
-    updatedCards[currentCardIndex].status = status;
+    updatedCards[currentCardIndex] = {
+      ...updatedCards[currentCardIndex],
+      status: status
+    };
+    
     setCards(updatedCards);
     setShowSentence(false);
-    moveToNextCard();
+
+    // Kartları filtreleyip bir sonraki kartı seçme
+    const availableCards = updatedCards.filter(card => card.status === studyMode);
+    const currentIndexInFiltered = availableCards.findIndex(
+      card => card.english === currentCard.english && card.turkish === currentCard.turkish
+    );
+
+    if (availableCards.length === 0) return;
+
+    let nextIndex = currentIndexInFiltered + 1;
+    if (nextIndex >= availableCards.length) {
+      nextIndex = 0;
+    }
+
+    const nextCard = availableCards[nextIndex];
+    const nextCardIndex = updatedCards.findIndex(
+      card => card.english === nextCard.english && card.turkish === nextCard.turkish
+    );
+
+    setCurrentCardIndex(nextCardIndex);
+    setCurrentCard(nextCard);
+    setIsFlipped(false);
   };
 
   const switchStudyMode = (mode: 'new' | 'practice') => {
@@ -189,12 +304,186 @@ export default function Home() {
   const newWords = cards.filter(card => card.status === 'new');
   const practiceWords = cards.filter(card => card.status === 'practice');
 
+  const addNewWord = () => {
+    if (!newWord.english.trim() || !newWord.turkish.trim()) return;
+
+    const newWordCard: Flashcard = {
+      english: newWord.english.trim(),
+      turkish: newWord.turkish.trim(),
+      status: 'new'
+    };
+
+    setCards(prevCards => [...prevCards, newWordCard]);
+    setNewWord({ english: '', turkish: '' });
+    setShowAddWordForm(false);
+  };
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-blue-100 to-white p-4">
       <div className="w-full max-w-4xl">
         <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">
           Flashcard Learning
         </h1>
+
+        {/* Saved Lists Section */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-700">Kayıtlı Listeler</h2>
+            <div className="flex gap-2">
+              {cards.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setShowSaveDialog(true)}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+                  >
+                    {currentListName ? 'Listeyi Farklı Kaydet' : 'Listeyi Kaydet'}
+                  </button>
+                  <button
+                    onClick={() => setShowAddWordForm(true)}
+                    className="px-4 py-2 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
+                  >
+                    Yeni Kelime Ekle
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          
+          {/* Add Word Form */}
+          {showAddWordForm && (
+            <div className="mb-4 p-4 bg-white rounded-xl shadow-md">
+              <div className="flex flex-col gap-3">
+                <input
+                  type="text"
+                  value={newWord.english}
+                  onChange={(e) => setNewWord(prev => ({ ...prev, english: e.target.value }))}
+                  placeholder="İngilizce kelime"
+                  className="px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <input
+                  type="text"
+                  value={newWord.turkish}
+                  onChange={(e) => setNewWord(prev => ({ ...prev, turkish: e.target.value }))}
+                  placeholder="Türkçe kelime"
+                  className="px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setShowAddWordForm(false)}
+                    className="px-4 py-2 bg-gray-500 text-white rounded-full hover:bg-gray-600 transition-colors"
+                  >
+                    İptal
+                  </button>
+                  <button
+                    onClick={addNewWord}
+                    className="px-4 py-2 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
+                  >
+                    Ekle
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Save Dialog */}
+          {showSaveDialog && (
+            <div className="mb-4 p-4 bg-white rounded-xl shadow-md">
+              <div className="flex flex-col gap-3">
+                <input
+                  type="text"
+                  value={listName}
+                  onChange={(e) => setListName(e.target.value)}
+                  placeholder="Liste adı girin"
+                  className="px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSaveCategory('all')}
+                    className={`flex-1 py-2 px-4 rounded-full transition-colors ${
+                      saveCategory === 'all'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-blue-100'
+                    }`}
+                  >
+                    Tüm Kelimeler ({cards.length})
+                  </button>
+                  <button
+                    onClick={() => setSaveCategory('ok')}
+                    className={`flex-1 py-2 px-4 rounded-full transition-colors ${
+                      saveCategory === 'ok'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-green-100'
+                    }`}
+                  >
+                    Bildiğim Kelimeler ({knownWords.length})
+                  </button>
+                  <button
+                    onClick={() => setSaveCategory('practice')}
+                    className={`flex-1 py-2 px-4 rounded-full transition-colors ${
+                      saveCategory === 'practice'
+                        ? 'bg-yellow-500 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-yellow-100'
+                    }`}
+                  >
+                    Pratik Gereken ({practiceWords.length})
+                  </button>
+                </div>
+                <div className="flex gap-2 justify-end mt-2">
+                  <button
+                    onClick={() => {
+                      setShowSaveDialog(false);
+                      setListName('');
+                      setSaveCategory('all');
+                    }}
+                    className="px-4 py-2 bg-gray-500 text-white rounded-full hover:bg-gray-600 transition-colors"
+                  >
+                    İptal
+                  </button>
+                  <button
+                    onClick={saveCurrentList}
+                    className="px-4 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
+                  >
+                    Kaydet
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Saved Lists */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {savedLists.map((list) => (
+              <div
+                key={list.name}
+                className={`p-4 rounded-xl shadow-md ${
+                  currentListName === list.name ? 'bg-blue-50 border-2 border-blue-500' : 'bg-white'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-semibold">{list.name}</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => loadSavedList(list)}
+                      className="px-3 py-1 bg-blue-500 text-white text-sm rounded-full hover:bg-blue-600 transition-colors"
+                    >
+                      Yükle
+                    </button>
+                    <button
+                      onClick={() => deleteSavedList(list.name)}
+                      className="px-3 py-1 bg-red-500 text-white text-sm rounded-full hover:bg-red-600 transition-colors"
+                    >
+                      Sil
+                    </button>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600">{list.cards.length} kelime</p>
+                <p className="text-xs text-gray-500">
+                  {new Date(list.createdAt).toLocaleDateString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* File Upload and Save Buttons */}
         <div className="mb-8 text-center flex justify-center gap-4">
