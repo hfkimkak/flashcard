@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
+import OpenAI from 'openai';
 
 interface Flashcard {
   english: string;
   turkish: string;
   status: 'new' | 'ok' | 'practice';
+  exampleSentence?: string;
 }
 
 interface ExcelRow {
@@ -14,6 +16,7 @@ interface ExcelRow {
   english?: string;
   Turkish?: string;
   turkish?: string;
+  ExampleSentence?: string;
   [key: string]: string | undefined;
 }
 
@@ -23,11 +26,50 @@ export default function Home() {
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [studyMode, setStudyMode] = useState<'new' | 'practice'>('new');
   const [activeList, setActiveList] = useState<'new' | 'ok' | 'practice' | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showSentence, setShowSentence] = useState(false);
   const [currentCard, setCurrentCard] = useState<Flashcard>({
     english: 'Example',
     turkish: 'Örnek',
     status: 'new'
   });
+
+  const openai = new OpenAI({
+    apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
+    dangerouslyAllowBrowser: true
+  });
+
+  const generateExampleSentence = async (word: string) => {
+    try {
+      setIsLoading(true);
+      const response = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{
+          role: "system",
+          content: "You are a helpful language tutor. Create a B2 level example sentence using the given word. The sentence should be academic and formal in nature."
+        }, {
+          role: "user",
+          content: `Create a B2 level academic example sentence using the word "${word}".`
+        }],
+        temperature: 0.7,
+        max_tokens: 100
+      });
+
+      const sentence = response.choices[0]?.message?.content || '';
+      
+      // Update the current card and cards array with the new sentence
+      const updatedCard = { ...currentCard, exampleSentence: sentence };
+      const updatedCards = [...cards];
+      updatedCards[currentCardIndex] = updatedCard;
+      
+      setCurrentCard(updatedCard);
+      setCards(updatedCards);
+    } catch (error) {
+      console.error('Error generating example sentence:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Shuffle function with proper typing
   const shuffleArray = <T,>(array: T[]): T[] => {
@@ -37,6 +79,29 @@ export default function Home() {
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
+  };
+
+  const saveToExcel = async () => {
+    try {
+      // Create worksheet data
+      const wsData = cards.map(card => ({
+        English: card.english,
+        Turkish: card.turkish,
+        ExampleSentence: card.exampleSentence || ''
+      }));
+
+      // Create a new workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(wsData);
+
+      // Add the worksheet to the workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Flashcards");
+
+      // Save the file
+      XLSX.writeFile(wb, "flashcards_with_examples.xlsx");
+    } catch (error) {
+      console.error('Error saving to Excel:', error);
+    }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,12 +115,13 @@ export default function Home() {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRow[];
 
-        // Create cards and shuffle them
+        // Create cards and shuffle them, now including example sentences
         const newCards: Flashcard[] = shuffleArray(
           jsonData.map((row: ExcelRow) => ({
             english: row.English || row.english || Object.values(row)[0] || '',
             turkish: row.Turkish || row.turkish || Object.values(row)[1] || '',
-            status: 'new'
+            status: 'new',
+            exampleSentence: row.ExampleSentence || undefined
           }))
         );
 
@@ -79,7 +145,7 @@ export default function Home() {
 
     let nextIndex = currentIndexInFiltered + 1;
     if (nextIndex >= availableCards.length) {
-      nextIndex = 0; // Döngüyü başa al
+      nextIndex = 0;
     }
 
     const nextCard = availableCards[nextIndex];
@@ -89,12 +155,14 @@ export default function Home() {
     setCurrentCardIndex(nextCardIndex);
     setCurrentCard(nextCard);
     setIsFlipped(false);
+    setShowSentence(false);
   };
 
   const handleCardStatus = (status: 'ok' | 'practice') => {
     const updatedCards = [...cards];
     updatedCards[currentCardIndex].status = status;
     setCards(updatedCards);
+    setShowSentence(false);
     moveToNextCard();
   };
 
@@ -109,6 +177,7 @@ export default function Home() {
       setCurrentCardIndex(firstCardIndex);
       setCurrentCard(firstCard);
       setIsFlipped(false);
+      setShowSentence(false);
     }
   };
 
@@ -127,8 +196,8 @@ export default function Home() {
           Flashcard Learning
         </h1>
 
-        {/* File Upload */}
-        <div className="mb-8 text-center">
+        {/* File Upload and Save Buttons */}
+        <div className="mb-8 text-center flex justify-center gap-4">
           <label className="bg-blue-500 text-white px-4 py-2 rounded-full cursor-pointer hover:bg-blue-600 transition-colors">
             Excel Dosyası Yükle
             <input
@@ -139,11 +208,19 @@ export default function Home() {
             />
           </label>
           {cards.length > 0 && (
-            <p className="mt-2 text-sm text-gray-600">
-              Toplam {cards.length} kelime yüklendi
-            </p>
+            <button
+              onClick={saveToExcel}
+              className="bg-green-500 text-white px-4 py-2 rounded-full hover:bg-green-600 transition-colors"
+            >
+              Cümlelerle Kaydet
+            </button>
           )}
         </div>
+        {cards.length > 0 && (
+          <p className="mt-2 text-sm text-gray-600 text-center">
+            Toplam {cards.length} kelime yüklendi
+          </p>
+        )}
         
         {/* Main Card Area */}
         <div className="w-full max-w-md mx-auto mb-8">
@@ -192,13 +269,67 @@ export default function Home() {
             >
               {/* Front side */}
               <div
-                className={`absolute w-full h-full bg-blue-50 rounded-xl shadow-lg p-6 flex items-center justify-center backface-hidden ${
+                className={`absolute w-full h-full bg-blue-50 rounded-xl shadow-lg p-6 flex flex-col items-center justify-center backface-hidden ${
                   isFlipped ? 'rotate-y-180' : ''
                 }`}
               >
-                <p className="text-2xl font-semibold text-gray-800">
+                <p className="text-2xl font-semibold text-gray-800 mb-4">
                   {currentCard.english}
                 </p>
+                {!isLoading && !currentCard.exampleSentence && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      generateExampleSentence(currentCard.english);
+                    }}
+                    className="mt-2 px-4 py-1 bg-indigo-500 text-white text-sm rounded-full hover:bg-indigo-600 transition-colors"
+                  >
+                    Örnek Cümle Oluştur
+                  </button>
+                )}
+                {!isLoading && currentCard.exampleSentence && !showSentence && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSentence(true);
+                    }}
+                    className="mt-2 px-4 py-1 bg-indigo-500 text-white text-sm rounded-full hover:bg-indigo-600 transition-colors"
+                  >
+                    Cümleyi Göster
+                  </button>
+                )}
+                {isLoading && (
+                  <p className="text-sm text-gray-500 mt-2">Cümle oluşturuluyor...</p>
+                )}
+                {currentCard.exampleSentence && showSentence && (
+                  <div className="mt-2 text-center">
+                    <p className="text-sm text-gray-600 italic">
+                      {currentCard.exampleSentence}
+                    </p>
+                    <div className="flex flex-col gap-2 mt-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSentence(false);
+                        }}
+                        className="px-3 py-1 bg-gray-400 text-white text-xs rounded-full hover:bg-gray-500 transition-colors"
+                      >
+                        Cümleyi Gizle
+                      </button>
+                      {!isLoading && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            generateExampleSentence(currentCard.english);
+                          }}
+                          className="px-3 py-1 bg-indigo-500 text-white text-xs rounded-full hover:bg-indigo-600 transition-colors"
+                        >
+                          Yeni Cümle Oluştur
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Back side */}
