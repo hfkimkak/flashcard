@@ -205,20 +205,38 @@ export default function Home() {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRow[];
 
-        // Create cards and shuffle them, now including example sentences
+        // Mevcut kartlardaki İngilizce kelimeleri bir Set'e ekleyelim
+        const existingWords = new Set(cards.map(card => card.english.toLowerCase().trim()));
+
+        // Yeni kartları oluştururken tekrar eden kelimeleri atlayalım
         const newCards: Flashcard[] = shuffleArray(
-          jsonData.map((row: ExcelRow) => ({
-            english: row.English || row.english || Object.values(row)[0] || '',
-            turkish: row.Turkish || row.turkish || Object.values(row)[1] || '',
-            status: 'new',
-            exampleSentence: row.ExampleSentence || undefined
-          }))
+          jsonData
+            .filter((row: ExcelRow) => {
+              const english = (row.English || row.english || Object.values(row)[0] || '').toLowerCase().trim();
+              // Eğer kelime zaten varsa false döndür (filtrelenir)
+              if (existingWords.has(english)) {
+                return false;
+              }
+              // Yeni kelimeyi Set'e ekle ve true döndür
+              existingWords.add(english);
+              return true;
+            })
+            .map((row: ExcelRow) => ({
+              english: (row.English || row.english || Object.values(row)[0] || '').trim(),
+              turkish: (row.Turkish || row.turkish || Object.values(row)[1] || '').trim(),
+              status: 'new',
+              exampleSentence: row.ExampleSentence || undefined
+            }))
         );
 
-        setCards(newCards);
+        // Yeni kartları mevcut kartlara ekle
+        setCards(prevCards => [...prevCards, ...newCards]);
+        
+        // Eğer yeni kartlar varsa, ilk kartı göster
         if (newCards.length > 0) {
-          setCurrentCard(newCards[0]);
-          setCurrentCardIndex(0);
+          const firstNewCard = newCards[0];
+          setCurrentCard(firstNewCard);
+          setCurrentCardIndex(cards.length); // Yeni eklenen kartların başlangıç indeksi
         }
       };
       reader.readAsBinaryString(file);
