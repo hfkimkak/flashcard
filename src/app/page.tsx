@@ -9,6 +9,14 @@ interface Flashcard {
   status: 'new' | 'ok' | 'practice';
 }
 
+interface ExcelRow {
+  English?: string;
+  english?: string;
+  Turkish?: string;
+  turkish?: string;
+  [key: string]: string | undefined;
+}
+
 export default function Home() {
   const [isFlipped, setIsFlipped] = useState(false);
   const [cards, setCards] = useState<Flashcard[]>([]);
@@ -19,22 +27,35 @@ export default function Home() {
     status: 'new'
   });
 
+  // Shuffle function with proper typing
+  const shuffleArray = <T,>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = (e: ProgressEvent<FileReader>) => {
         const data = e.target?.result;
         const workbook = XLSX.read(data, { type: 'binary' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRow[];
 
-        const newCards: Flashcard[] = jsonData.map((row: any) => ({
-          english: row.English || row.english || Object.values(row)[0],
-          turkish: row.Turkish || row.turkish || Object.values(row)[1],
-          status: 'new'
-        }));
+        // Create cards and shuffle them
+        const newCards: Flashcard[] = shuffleArray(
+          jsonData.map((row: ExcelRow) => ({
+            english: row.English || row.english || Object.values(row)[0] || '',
+            turkish: row.Turkish || row.turkish || Object.values(row)[1] || '',
+            status: 'new'
+          }))
+        );
 
         setCards(newCards);
         if (newCards.length > 0) {
@@ -43,6 +64,24 @@ export default function Home() {
         }
       };
       reader.readAsBinaryString(file);
+    }
+  };
+
+  // Add shuffle current cards function
+  const shuffleCurrentCards = () => {
+    const remainingNewCards = cards.filter(card => card.status === 'new');
+    const shuffledNewCards = shuffleArray([...remainingNewCards]);
+    const otherCards = cards.filter(card => card.status !== 'new');
+    
+    const newCardsList = [...shuffledNewCards, ...otherCards];
+    setCards(newCardsList);
+    
+    // Reset to first new card if available
+    const firstNewCardIndex = newCardsList.findIndex(card => card.status === 'new');
+    if (firstNewCardIndex !== -1) {
+      setCurrentCardIndex(firstNewCardIndex);
+      setCurrentCard(newCardsList[firstNewCardIndex]);
+      setIsFlipped(false);
     }
   };
 
@@ -98,6 +137,16 @@ export default function Home() {
         
         {/* Main Card Area */}
         <div className="w-full max-w-md mx-auto mb-8">
+          {/* Shuffle Button */}
+          {cards.length > 0 && (
+            <button
+              onClick={shuffleCurrentCards}
+              className="w-full mb-4 px-4 py-2 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
+            >
+              Kelimeleri Karıştır
+            </button>
+          )}
+
           {/* Flashcard */}
           <div className="relative w-full aspect-[3/2] perspective-1000">
             <div
