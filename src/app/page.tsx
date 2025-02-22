@@ -22,6 +22,7 @@ export default function Home() {
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [studyMode, setStudyMode] = useState<'new' | 'practice'>('new');
+  const [activeList, setActiveList] = useState<'new' | 'ok' | 'practice' | null>(null);
   const [currentCard, setCurrentCard] = useState<Flashcard>({
     english: 'Example',
     turkish: 'Örnek',
@@ -74,15 +75,20 @@ export default function Home() {
       card => card.english === currentCard.english && card.turkish === currentCard.turkish
     );
 
-    if (currentIndexInFiltered < availableCards.length - 1) {
-      const nextCard = availableCards[currentIndexInFiltered + 1];
-      const nextCardIndex = cards.findIndex(
-        card => card.english === nextCard.english && card.turkish === nextCard.turkish
-      );
-      setCurrentCardIndex(nextCardIndex);
-      setCurrentCard(nextCard);
-      setIsFlipped(false);
+    if (availableCards.length === 0) return;
+
+    let nextIndex = currentIndexInFiltered + 1;
+    if (nextIndex >= availableCards.length) {
+      nextIndex = 0; // Döngüyü başa al
     }
+
+    const nextCard = availableCards[nextIndex];
+    const nextCardIndex = cards.findIndex(
+      card => card.english === nextCard.english && card.turkish === nextCard.turkish
+    );
+    setCurrentCardIndex(nextCardIndex);
+    setCurrentCard(nextCard);
+    setIsFlipped(false);
   };
 
   const handleCardStatus = (status: 'ok' | 'practice') => {
@@ -186,7 +192,7 @@ export default function Home() {
             >
               {/* Front side */}
               <div
-                className={`absolute w-full h-full bg-white rounded-xl shadow-lg p-6 flex items-center justify-center backface-hidden ${
+                className={`absolute w-full h-full bg-blue-50 rounded-xl shadow-lg p-6 flex items-center justify-center backface-hidden ${
                   isFlipped ? 'rotate-y-180' : ''
                 }`}
               >
@@ -197,7 +203,7 @@ export default function Home() {
               
               {/* Back side */}
               <div
-                className={`absolute w-full h-full bg-white rounded-xl shadow-lg p-6 flex items-center justify-center backface-hidden rotate-y-180 ${
+                className={`absolute w-full h-full bg-green-50 rounded-xl shadow-lg p-6 flex items-center justify-center backface-hidden rotate-y-180 ${
                   isFlipped ? 'rotate-y-0' : ''
                 }`}
               >
@@ -232,51 +238,64 @@ export default function Home() {
         </div>
 
         {/* Word Lists Section */}
-        <div className="grid grid-cols-3 gap-4 mt-8 bg-white rounded-xl p-4 shadow-lg">
-          {/* Known Words */}
-          <div className="border-r border-gray-200 p-4">
-            <h3 className="text-lg font-semibold text-green-600 mb-4 text-center">
+        <div className="mt-8 bg-white rounded-xl p-4 shadow-lg">
+          {/* List Selection Buttons */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setActiveList(activeList === 'ok' ? null : 'ok')}
+              className={`flex-1 py-2 px-4 rounded-full transition-colors ${
+                activeList === 'ok'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-green-100'
+              }`}
+            >
               Bildiğim Kelimeler ({knownWords.length})
-            </h3>
-            <div className="max-h-60 overflow-y-auto">
-              {knownWords.map((word, index) => (
+            </button>
+            <button
+              onClick={() => setActiveList(activeList === 'new' ? null : 'new')}
+              className={`flex-1 py-2 px-4 rounded-full transition-colors ${
+                activeList === 'new'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-blue-100'
+              }`}
+            >
+              Yeni Kelimeler ({newWords.length})
+            </button>
+            <button
+              onClick={() => setActiveList(activeList === 'practice' ? null : 'practice')}
+              className={`flex-1 py-2 px-4 rounded-full transition-colors ${
+                activeList === 'practice'
+                  ? 'bg-yellow-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-yellow-100'
+              }`}
+            >
+              Pratik Gereken ({practiceWords.length})
+            </button>
+          </div>
+
+          {/* Active List Content */}
+          {activeList && (
+            <div className="max-h-60 overflow-y-auto mt-4">
+              {activeList === 'ok' && knownWords.map((word, index) => (
                 <div key={index} className="bg-green-50 p-2 rounded mb-2 text-sm">
                   <span className="font-medium">{word.english}</span>
                   <span className="text-gray-500"> - {word.turkish}</span>
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* New Words */}
-          <div className="border-r border-gray-200 p-4">
-            <h3 className="text-lg font-semibold text-blue-600 mb-4 text-center">
-              Yeni Kelimeler ({newWords.length})
-            </h3>
-            <div className="max-h-60 overflow-y-auto">
-              {newWords.map((word, index) => (
+              {activeList === 'new' && newWords.map((word, index) => (
                 <div key={index} className="bg-blue-50 p-2 rounded mb-2 text-sm">
                   <span className="font-medium">{word.english}</span>
                   <span className="text-gray-500"> - {word.turkish}</span>
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* Practice Words */}
-          <div className="p-4">
-            <h3 className="text-lg font-semibold text-yellow-600 mb-4 text-center">
-              Pratik Gereken ({practiceWords.length})
-            </h3>
-            <div className="max-h-60 overflow-y-auto">
-              {practiceWords.map((word, index) => (
+              {activeList === 'practice' && practiceWords.map((word, index) => (
                 <div key={index} className="bg-yellow-50 p-2 rounded mb-2 text-sm">
                   <span className="font-medium">{word.english}</span>
                   <span className="text-gray-500"> - {word.turkish}</span>
                 </div>
               ))}
             </div>
-          </div>
+          )}
         </div>
       </div>
     </main>
