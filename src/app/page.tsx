@@ -47,6 +47,13 @@ export default function Home() {
   });
   const [saveCategory, setSaveCategory] = useState<'all' | 'new' | 'ok' | 'practice'>('all');
 
+  // Touch handling için state'ler
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  // Minimum kaydırma mesafesi
+  const minSwipeDistance = 50;
+
   const openai = new OpenAI({
     apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true
@@ -384,16 +391,144 @@ export default function Home() {
       status: 'new'
     };
 
-    setCards(prevCards => [...prevCards, newWordCard]);
+    setCards(prevCards => {
+      const updatedCards = [...prevCards, newWordCard];
+      // Eğer bu ilk kelime ise, currentCard ve currentCardIndex'i güncelle
+      if (prevCards.length === 0) {
+        setCurrentCard(newWordCard);
+        setCurrentCardIndex(0);
+      }
+      return updatedCards;
+    });
+    
     setNewWord({ english: '', turkish: '' });
     setShowAddWordForm(false);
+  };
+
+  // Download saved list
+  const downloadList = (list: SavedWordList) => {
+    try {
+      const dataStr = JSON.stringify(list, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${list.name}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading list:', error);
+    }
+  };
+
+  // Upload saved list
+  const handleListUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e: ProgressEvent<FileReader>) => {
+        try {
+          const uploadedList = JSON.parse(e.target?.result as string) as SavedWordList;
+          
+          // Listede gerekli alanların kontrolü
+          if (!uploadedList.name || !Array.isArray(uploadedList.cards)) {
+            alert('Geçersiz liste formatı');
+            return;
+          }
+
+          // Aynı isimde liste var mı kontrolü
+          const existingList = savedLists.find(list => list.name === uploadedList.name);
+          if (existingList) {
+            if (!confirm('Bu isimde bir liste zaten var. Üzerine yazmak ister misiniz?')) {
+              return;
+            }
+            // Varolan listeyi güncelle
+            const updatedLists = savedLists.map(list =>
+              list.name === uploadedList.name ? uploadedList : list
+            );
+            setSavedLists(updatedLists);
+            localStorage.setItem('wordLists', JSON.stringify(updatedLists));
+          } else {
+            // Yeni liste olarak ekle
+            const updatedLists = [...savedLists, uploadedList];
+            setSavedLists(updatedLists);
+            localStorage.setItem('wordLists', JSON.stringify(updatedLists));
+          }
+
+          // Listeyi yükle
+          loadSavedList(uploadedList);
+        } catch (error) {
+          console.error('Error parsing uploaded list:', error);
+          alert('Liste yüklenirken bir hata oluştu');
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  // Kelime durumunu değiştirme fonksiyonu
+  const changeWordStatus = (word: Flashcard, newStatus: 'new' | 'ok' | 'practice') => {
+    const updatedCards = cards.map(card =>
+      card.english === word.english ? { ...card, status: newStatus } : card
+    );
+    setCards(updatedCards);
+  };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      moveToNextCard(); // Sola kaydırma - sonraki kart
+    }
+    if (isRightSwipe) {
+      moveToPreviousCard(); // Sağa kaydırma - önceki kart
+    }
+  };
+
+  // Önceki karta geçiş fonksiyonu
+  const moveToPreviousCard = () => {
+    const availableCards = cards.filter(card => card.status === studyMode);
+    const currentIndexInFiltered = availableCards.findIndex(
+      card => card.english === currentCard.english && card.turkish === currentCard.turkish
+    );
+
+    if (availableCards.length === 0) return;
+
+    let prevIndex = currentIndexInFiltered - 1;
+    if (prevIndex < 0) {
+      prevIndex = availableCards.length - 1;
+    }
+
+    const prevCard = availableCards[prevIndex];
+    const prevCardIndex = cards.findIndex(
+      card => card.english === prevCard.english && card.turkish === prevCard.turkish
+    );
+    setCurrentCardIndex(prevCardIndex);
+    setCurrentCard(prevCard);
+    setIsFlipped(false);
+    setShowSentence(false);
   };
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-blue-100 to-white p-4">
       <div className="w-full max-w-4xl">
         <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">
-          Flashcard Learning
+          HFK Kelime Öğrenme Platformu
         </h1>
 
         {/* Saved Lists Section */}
@@ -401,22 +536,27 @@ export default function Home() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-700">Kayıtlı Listeler</h2>
             <div className="flex gap-2">
-              {cards.length > 0 && (
-                <>
-                  <button
-                    onClick={() => setShowSaveDialog(true)}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
-                  >
-                    {currentListName ? 'Listeyi Farklı Kaydet' : 'Listeyi Kaydet'}
-                  </button>
-                  <button
-                    onClick={() => setShowAddWordForm(true)}
-                    className="px-4 py-2 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
-                  >
-                    Yeni Kelime Ekle
-                  </button>
-                </>
-              )}
+              <label className="px-4 py-2 bg-green-500 text-white rounded-full cursor-pointer hover:bg-green-600 transition-colors">
+                Liste Yükle
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleListUpload}
+                  className="hidden"
+                />
+              </label>
+              <button
+                onClick={() => setShowSaveDialog(true)}
+                className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+              >
+                {currentListName ? 'Listeyi Farklı Kaydet' : 'Listeyi Kaydet'}
+              </button>
+              <button
+                onClick={() => setShowAddWordForm(true)}
+                className="px-4 py-2 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
+              >
+                Yeni Kelime Ekle
+              </button>
             </div>
           </div>
           
@@ -540,6 +680,12 @@ export default function Home() {
                       Yükle
                     </button>
                     <button
+                      onClick={() => downloadList(list)}
+                      className="px-3 py-1 bg-green-500 text-white text-sm rounded-full hover:bg-green-600 transition-colors"
+                    >
+                      İndir
+                    </button>
+                    <button
                       onClick={() => deleteSavedList(list.name)}
                       className="px-3 py-1 bg-red-500 text-white text-sm rounded-full hover:bg-red-600 transition-colors"
                     >
@@ -622,9 +768,24 @@ export default function Home() {
 
           {/* Flashcard */}
           <div className="relative w-full aspect-[3/2] perspective-1000">
+            {/* Navigation Buttons */}
+            <button
+              onClick={moveToPreviousCard}
+              className="absolute left-[-40px] top-1/2 -translate-y-1/2 z-10 bg-gray-200 hover:bg-gray-300 text-gray-600 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+              style={{ outline: 'none' }}
+            >
+              &#8592;
+            </button>
+            <button
+              onClick={moveToNextCard}
+              className="absolute right-[-40px] top-1/2 -translate-y-1/2 z-10 bg-gray-200 hover:bg-gray-300 text-gray-600 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+              style={{ outline: 'none' }}
+            >
+              &#8594;
+            </button>
+
             <div
-              className="relative w-full h-full cursor-pointer transition-transform duration-500"
-              style={{ transformStyle: 'preserve-3d' }}
+              className="relative w-full h-full cursor-pointer transition-transform duration-500 transform-style-3d"
               onClick={() => setIsFlipped(!isFlipped)}
             >
               {/* Front side */}
@@ -768,21 +929,69 @@ export default function Home() {
           {activeList && (
             <div className="max-h-60 overflow-y-auto mt-4">
               {activeList === 'ok' && knownWords.map((word, index) => (
-                <div key={index} className="bg-green-50 p-2 rounded mb-2 text-sm">
-                  <span className="font-medium">{word.english}</span>
-                  <span className="text-gray-500"> - {word.turkish}</span>
+                <div key={index} className="bg-green-50 p-2 rounded mb-2 text-sm flex justify-between items-center">
+                  <div>
+                    <span className="font-medium">{word.english}</span>
+                    <span className="text-gray-500"> - {word.turkish}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => changeWordStatus(word, 'new')}
+                      className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full hover:bg-blue-600 transition-colors"
+                    >
+                      Yeni
+                    </button>
+                    <button
+                      onClick={() => changeWordStatus(word, 'practice')}
+                      className="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full hover:bg-yellow-600 transition-colors"
+                    >
+                      Pratik
+                    </button>
+                  </div>
                 </div>
               ))}
               {activeList === 'new' && newWords.map((word, index) => (
-                <div key={index} className="bg-blue-50 p-2 rounded mb-2 text-sm">
-                  <span className="font-medium">{word.english}</span>
-                  <span className="text-gray-500"> - {word.turkish}</span>
+                <div key={index} className="bg-blue-50 p-2 rounded mb-2 text-sm flex justify-between items-center">
+                  <div>
+                    <span className="font-medium">{word.english}</span>
+                    <span className="text-gray-500"> - {word.turkish}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => changeWordStatus(word, 'ok')}
+                      className="px-2 py-1 bg-green-500 text-white text-xs rounded-full hover:bg-green-600 transition-colors"
+                    >
+                      Biliyorum
+                    </button>
+                    <button
+                      onClick={() => changeWordStatus(word, 'practice')}
+                      className="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full hover:bg-yellow-600 transition-colors"
+                    >
+                      Pratik
+                    </button>
+                  </div>
                 </div>
               ))}
               {activeList === 'practice' && practiceWords.map((word, index) => (
-                <div key={index} className="bg-yellow-50 p-2 rounded mb-2 text-sm">
-                  <span className="font-medium">{word.english}</span>
-                  <span className="text-gray-500"> - {word.turkish}</span>
+                <div key={index} className="bg-yellow-50 p-2 rounded mb-2 text-sm flex justify-between items-center">
+                  <div>
+                    <span className="font-medium">{word.english}</span>
+                    <span className="text-gray-500"> - {word.turkish}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => changeWordStatus(word, 'new')}
+                      className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full hover:bg-blue-600 transition-colors"
+                    >
+                      Yeni
+                    </button>
+                    <button
+                      onClick={() => changeWordStatus(word, 'ok')}
+                      className="px-2 py-1 bg-green-500 text-white text-xs rounded-full hover:bg-green-600 transition-colors"
+                    >
+                      Biliyorum
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
