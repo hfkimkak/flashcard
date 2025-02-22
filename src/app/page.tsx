@@ -411,15 +411,36 @@ export default function Home() {
       const dataStr = JSON.stringify(list, null, 2);
       const dataBlob = new Blob([dataStr], { type: 'application/json' });
       const url = URL.createObjectURL(dataBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${list.name}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+
+      // Mobil cihaz kontrolü
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      if (isMobile) {
+        // Mobil cihazlar için
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const link = document.createElement('a');
+          link.href = e.target?.result as string;
+          link.download = `${list.name}.json`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+        };
+        reader.readAsDataURL(dataBlob);
+      } else {
+        // Masaüstü için
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${list.name}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
     } catch (error) {
       console.error('Error downloading list:', error);
+      alert('Liste indirilirken bir hata oluştu. Lütfen tekrar deneyin.');
     }
   };
 
