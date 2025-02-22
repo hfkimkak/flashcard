@@ -9,10 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@types/react-window": "^1.8.8",
     "next": "15.1.7",
     "openai": "^4.85.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-window": "^1.8.11",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

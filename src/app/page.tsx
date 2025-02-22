@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import OpenAI from 'openai';
+import { FixedSizeList as List } from 'react-window';
 
 interface Flashcard {
   english: string;
@@ -742,18 +743,18 @@ export default function Home() {
           )}
 
           {/* Flashcard */}
-          <div className="relative w-full aspect-[3/2] perspective-1000">
+          <div className="relative w-[80%] mx-auto aspect-[3/2] perspective-1000">
             {/* Navigation Buttons */}
             <button
               onClick={moveToPreviousCard}
-              className="absolute left-[-40px] top-1/2 -translate-y-1/2 z-10 bg-gray-200 hover:bg-gray-300 text-gray-600 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+              className="absolute left-[-50px] top-1/2 -translate-y-1/2 z-10 bg-gray-200 hover:bg-gray-300 text-gray-600 w-10 h-10 rounded-full flex items-center justify-center transition-colors"
               style={{ outline: 'none' }}
             >
               &#8592;
             </button>
             <button
               onClick={moveToNextCard}
-              className="absolute right-[-40px] top-1/2 -translate-y-1/2 z-10 bg-gray-200 hover:bg-gray-300 text-gray-600 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+              className="absolute right-[-50px] top-1/2 -translate-y-1/2 z-10 bg-gray-200 hover:bg-gray-300 text-gray-600 w-10 h-10 rounded-full flex items-center justify-center transition-colors"
               style={{ outline: 'none' }}
             >
               &#8594;
@@ -902,73 +903,95 @@ export default function Home() {
 
           {/* Active List Content */}
           {activeList && (
-            <div className="max-h-60 overflow-y-auto mt-4">
-              {activeList === 'ok' && knownWords.map((word, index) => (
-                <div key={index} className="bg-green-50 p-2 rounded mb-2 text-sm flex justify-between items-center">
-                  <div>
-                    <span className="font-medium">{word.english}</span>
-                    <span className="text-gray-500"> - {word.turkish}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => changeWordStatus(word, 'new')}
-                      className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full hover:bg-blue-600 transition-colors"
-                    >
-                      Yeni
-                    </button>
-                    <button
-                      onClick={() => changeWordStatus(word, 'practice')}
-                      className="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full hover:bg-yellow-600 transition-colors"
-                    >
-                      Pratik
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {activeList === 'new' && newWords.map((word, index) => (
-                <div key={index} className="bg-blue-50 p-2 rounded mb-2 text-sm flex justify-between items-center">
-                  <div>
-                    <span className="font-medium">{word.english}</span>
-                    <span className="text-gray-500"> - {word.turkish}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => changeWordStatus(word, 'ok')}
-                      className="px-2 py-1 bg-green-500 text-white text-xs rounded-full hover:bg-green-600 transition-colors"
-                    >
-                      Biliyorum
-                    </button>
-                    <button
-                      onClick={() => changeWordStatus(word, 'practice')}
-                      className="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full hover:bg-yellow-600 transition-colors"
-                    >
-                      Pratik
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {activeList === 'practice' && practiceWords.map((word, index) => (
-                <div key={index} className="bg-yellow-50 p-2 rounded mb-2 text-sm flex justify-between items-center">
-                  <div>
-                    <span className="font-medium">{word.english}</span>
-                    <span className="text-gray-500"> - {word.turkish}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => changeWordStatus(word, 'new')}
-                      className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full hover:bg-blue-600 transition-colors"
-                    >
-                      Yeni
-                    </button>
-                    <button
-                      onClick={() => changeWordStatus(word, 'ok')}
-                      className="px-2 py-1 bg-green-500 text-white text-xs rounded-full hover:bg-green-600 transition-colors"
-                    >
-                      Biliyorum
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div className="h-60 mt-4">
+              <List
+                height={240}
+                itemCount={
+                  activeList === 'ok'
+                    ? knownWords.length
+                    : activeList === 'new'
+                    ? newWords.length
+                    : practiceWords.length
+                }
+                itemSize={50}
+                width="100%"
+              >
+                {({ index, style }: { index: number; style: React.CSSProperties }) => {
+                  const word =
+                    activeList === 'ok'
+                      ? knownWords[index]
+                      : activeList === 'new'
+                      ? newWords[index]
+                      : practiceWords[index];
+                  
+                  return (
+                    <div style={style}>
+                      <div className={`p-2 rounded mb-2 text-sm flex justify-between items-center ${
+                        activeList === 'ok'
+                          ? 'bg-green-50'
+                          : activeList === 'new'
+                          ? 'bg-blue-50'
+                          : 'bg-yellow-50'
+                      }`}>
+                        <div>
+                          <span className="font-medium">{word.english}</span>
+                          <span className="text-gray-500"> - {word.turkish}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          {activeList === 'ok' && (
+                            <>
+                              <button
+                                onClick={() => changeWordStatus(word, 'new')}
+                                className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full hover:bg-blue-600 transition-colors"
+                              >
+                                Yeni
+                              </button>
+                              <button
+                                onClick={() => changeWordStatus(word, 'practice')}
+                                className="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full hover:bg-yellow-600 transition-colors"
+                              >
+                                Pratik
+                              </button>
+                            </>
+                          )}
+                          {activeList === 'new' && (
+                            <>
+                              <button
+                                onClick={() => changeWordStatus(word, 'ok')}
+                                className="px-2 py-1 bg-green-500 text-white text-xs rounded-full hover:bg-green-600 transition-colors"
+                              >
+                                Biliyorum
+                              </button>
+                              <button
+                                onClick={() => changeWordStatus(word, 'practice')}
+                                className="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full hover:bg-yellow-600 transition-colors"
+                              >
+                                Pratik
+                              </button>
+                            </>
+                          )}
+                          {activeList === 'practice' && (
+                            <>
+                              <button
+                                onClick={() => changeWordStatus(word, 'new')}
+                                className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full hover:bg-blue-600 transition-colors"
+                              >
+                                Yeni
+                              </button>
+                              <button
+                                onClick={() => changeWordStatus(word, 'ok')}
+                                className="px-2 py-1 bg-green-500 text-white text-xs rounded-full hover:bg-green-600 transition-colors"
+                              >
+                                Biliyorum
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }}
+              </List>
             </div>
           )}
         </div>
