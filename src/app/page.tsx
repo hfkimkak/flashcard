@@ -21,6 +21,7 @@ export default function Home() {
   const [isFlipped, setIsFlipped] = useState(false);
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [studyMode, setStudyMode] = useState<'new' | 'practice'>('new');
   const [currentCard, setCurrentCard] = useState<Flashcard>({
     english: 'Example',
     turkish: 'Örnek',
@@ -67,37 +68,40 @@ export default function Home() {
     }
   };
 
-  // Add shuffle current cards function
-  const shuffleCurrentCards = () => {
-    const remainingNewCards = cards.filter(card => card.status === 'new');
-    const shuffledNewCards = shuffleArray([...remainingNewCards]);
-    const otherCards = cards.filter(card => card.status !== 'new');
-    
-    const newCardsList = [...shuffledNewCards, ...otherCards];
-    setCards(newCardsList);
-    
-    // Reset to first new card if available
-    const firstNewCardIndex = newCardsList.findIndex(card => card.status === 'new');
-    if (firstNewCardIndex !== -1) {
-      setCurrentCardIndex(firstNewCardIndex);
-      setCurrentCard(newCardsList[firstNewCardIndex]);
+  const moveToNextCard = () => {
+    const availableCards = cards.filter(card => card.status === studyMode);
+    const currentIndexInFiltered = availableCards.findIndex(
+      card => card.english === currentCard.english && card.turkish === currentCard.turkish
+    );
+
+    if (currentIndexInFiltered < availableCards.length - 1) {
+      const nextCard = availableCards[currentIndexInFiltered + 1];
+      const nextCardIndex = cards.findIndex(
+        card => card.english === nextCard.english && card.turkish === nextCard.turkish
+      );
+      setCurrentCardIndex(nextCardIndex);
+      setCurrentCard(nextCard);
       setIsFlipped(false);
     }
-  };
-
-  const handleFlip = () => {
-    setIsFlipped(!isFlipped);
   };
 
   const handleCardStatus = (status: 'ok' | 'practice') => {
     const updatedCards = [...cards];
     updatedCards[currentCardIndex].status = status;
     setCards(updatedCards);
+    moveToNextCard();
+  };
 
-    // Move to next card if available
-    if (currentCardIndex < cards.length - 1) {
-      setCurrentCardIndex(currentCardIndex + 1);
-      setCurrentCard(cards[currentCardIndex + 1]);
+  const switchStudyMode = (mode: 'new' | 'practice') => {
+    setStudyMode(mode);
+    const availableCards = cards.filter(card => card.status === mode);
+    if (availableCards.length > 0) {
+      const firstCard = availableCards[0];
+      const firstCardIndex = cards.findIndex(
+        card => card.english === firstCard.english && card.turkish === firstCard.turkish
+      );
+      setCurrentCardIndex(firstCardIndex);
+      setCurrentCard(firstCard);
       setIsFlipped(false);
     }
   };
@@ -137,10 +141,36 @@ export default function Home() {
         
         {/* Main Card Area */}
         <div className="w-full max-w-md mx-auto mb-8">
+          {/* Study Mode Selector */}
+          {cards.length > 0 && (
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => switchStudyMode('new')}
+                className={`flex-1 py-2 rounded-full transition-colors ${
+                  studyMode === 'new'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-blue-100'
+                }`}
+              >
+                Yeni Kelimeler ({newWords.length})
+              </button>
+              <button
+                onClick={() => switchStudyMode('practice')}
+                className={`flex-1 py-2 rounded-full transition-colors ${
+                  studyMode === 'practice'
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-yellow-100'
+                }`}
+              >
+                Pratik Kelimeler ({practiceWords.length})
+              </button>
+            </div>
+          )}
+
           {/* Shuffle Button */}
           {cards.length > 0 && (
             <button
-              onClick={shuffleCurrentCards}
+              onClick={moveToNextCard}
               className="w-full mb-4 px-4 py-2 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
             >
               Kelimeleri Karıştır
@@ -152,7 +182,7 @@ export default function Home() {
             <div
               className="relative w-full h-full cursor-pointer transition-transform duration-500"
               style={{ transformStyle: 'preserve-3d' }}
-              onClick={handleFlip}
+              onClick={() => setIsFlipped(!isFlipped)}
             >
               {/* Front side */}
               <div
