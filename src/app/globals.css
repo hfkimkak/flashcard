@@ -25,25 +25,78 @@
   }
 }
 
+@layer components {
+  .flashcard {
+    @apply bg-white rounded-2xl shadow-lg p-6 flex items-start justify-start min-h-[400px] overflow-auto;
+  }
+  
+  .flashcard-word {
+    @apply text-3xl font-bold text-gray-800;
+  }
+  
+  .flashcard-sentence {
+    @apply text-base text-gray-600 mt-4;
+  }
+  
+  .btn {
+    @apply px-6 py-2.5 rounded-full font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+  
+  .btn-primary {
+    @apply btn bg-blue-500 text-white hover:bg-blue-600 focus:ring-blue-500;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-green-500 text-white hover:bg-green-600 focus:ring-green-500;
+  }
+  
+  .btn-accent {
+    @apply btn bg-purple-500 text-white hover:bg-purple-600 focus:ring-purple-500;
+  }
+  
+  .btn-warning {
+    @apply btn bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500;
+  }
+  
+  .btn-sm {
+    @apply px-4 py-1.5 text-sm rounded-full;
+  }
+}
+
 .transform {
   transform-style: preserve-3d;
   backface-visibility: hidden;
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f0f7ff;
+  --foreground: #2d3748;
+  --primary: #4299e1;
+  --primary-hover: #3182ce;
+  --secondary: #38b2ac;
+  --secondary-hover: #319795;
+  --accent: #9f7aea;
+  --accent-hover: #805ad5;
+  --success: #48bb78;
+  --warning: #ecc94b;
+  --danger: #f56565;
+  --card-bg: #ffffff;
+  --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --card-radius: 1rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #1a202c;
+    --foreground: #e2e8f0;
+    --card-bg: #2d3748;
+    --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
   }
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
 }

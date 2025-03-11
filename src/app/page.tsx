@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import OpenAI from 'openai';
 import { FixedSizeList as List } from 'react-window';
+import PracticeExam from './components/PracticeExam';
 
 interface Flashcard {
   english: string;
@@ -27,12 +28,15 @@ interface SavedWordList {
   createdAt: string;
 }
 
+type ListType = 'new' | 'ok' | 'practice' | null;
+type StudyModeType = 'new' | 'practice';
+
 export default function Home() {
   const [isFlipped, setIsFlipped] = useState(false);
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
-  const [studyMode, setStudyMode] = useState<'new' | 'practice'>('new');
-  const [activeList, setActiveList] = useState<'new' | 'ok' | 'practice' | null>(null);
+  const [studyMode, setStudyMode] = useState<StudyModeType>('new');
+  const [activeList, setActiveList] = useState<ListType>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showSentence, setShowSentence] = useState(false);
   const [savedLists, setSavedLists] = useState<SavedWordList[]>([]);
@@ -47,6 +51,15 @@ export default function Home() {
     status: 'new'
   });
   const [saveCategory, setSaveCategory] = useState<'all' | 'new' | 'ok' | 'practice'>('all');
+  const [showStudyControls, setShowStudyControls] = useState(false);
+  const [showSavedLists, setShowSavedLists] = useState(false);
+  const [showExcelControls, setShowExcelControls] = useState(false);
+  const [showPracticeExam, setShowPracticeExam] = useState(false);
+  
+  // Kelime düzenleme için state'ler
+  const [editingWord, setEditingWord] = useState<Flashcard | null>(null);
+  const [editedEnglish, setEditedEnglish] = useState('');
+  const [editedTurkish, setEditedTurkish] = useState('');
 
   // Touch handling için state'ler
   // const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -120,47 +133,91 @@ export default function Home() {
   const updateCurrentList = useCallback(() => {
     if (!currentListName) return;
     
-    const updatedLists = savedLists.map(list => 
-      list.name === currentListName 
-        ? { ...list, cards, updatedAt: new Date().toISOString() }
-        : list
-    );
+    // Mevcut liste adıyla eşleşen listeyi bul
+    const currentListIndex = savedLists.findIndex(list => list.name === currentListName);
+    if (currentListIndex === -1) return;
+    
+    // Eğer kartlar değişmediyse güncelleme yapma
+    if (JSON.stringify(savedLists[currentListIndex].cards) === JSON.stringify(cards)) return;
+    
+    const updatedLists = [...savedLists];
+    updatedLists[currentListIndex] = {
+      ...updatedLists[currentListIndex],
+      cards
+    };
     
     setSavedLists(updatedLists);
     localStorage.setItem('wordLists', JSON.stringify(updatedLists));
   }, [currentListName, cards, savedLists]);
 
+  // Kartlar değiştiğinde listeyi güncelle
   useEffect(() => {
     if (currentListName && cards.length > 0) {
+      // Bir sonraki render'da çalışacak şekilde zamanlayalım
+      const timeoutId = setTimeout(() => {
       updateCurrentList();
+      }, 0);
+      return () => clearTimeout(timeoutId);
     }
-  }, [currentListName, cards, updateCurrentList]);
+  }, [cards, updateCurrentList]);
 
   const generateExampleSentence = async (word: string) => {
     try {
       setIsLoading(true);
+      
+      const prompt = `
+Lütfen "${word}" kelimesi için aşağıdaki formatta kapsamlı bir açıklama ve örnek cümleler oluşturun:
+
+"${word}" kelimesi, [TÜRKÇE KARŞILIĞI] anlamına gelir ve [KULLANIM BAĞLAMI]. Bu terim, [EK BİLGİ].
+
+Anlamı:
+1. [BİRİNCİ ANLAM]: [AÇIKLAMA]
+2. [İKİNCİ ANLAM]: [AÇIKLAMA]
+3. [ÜÇÜNCÜ ANLAM veya KULLANIM]: [AÇIKLAMA]
+
+Özetle:
+"${word}", [ÖZET TANIM]. [EK AÇIKLAMA].
+
+Örnekler:
+- [İNGİLİZCE ÖRNEK CÜMLE 1]. ([TÜRKÇE ÇEVİRİSİ])
+- [İNGİLİZCE ÖRNEK CÜMLE 2]. ([TÜRKÇE ÇEVİRİSİ])
+- [İNGİLİZCE ÖRNEK CÜMLE 3]. ([TÜRKÇE ÇEVİRİSİ])
+
+Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve her cümlenin Türkçe çevirisini de ekleyin.
+`;
+
       const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [{
-          role: "system",
-          content: "You are a helpful language tutor. Create a B2 level example sentence using the given word. The sentence should be academic and formal in nature."
-        }, {
-          role: "user",
-          content: `Create a B2 level academic example sentence using the word "${word}".`
-        }],
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'Sen İngilizce-Türkçe dil öğreniminde uzmanlaşmış bir eğitim asistanısın. Kelimelerin anlamlarını, kullanımlarını ve örnek cümlelerini kapsamlı bir şekilde açıklayabilirsin.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
         temperature: 0.7,
-        max_tokens: 100
+        max_tokens: 1000
       });
 
-      const sentence = response.choices[0]?.message?.content || '';
+      const exampleSentence = response.choices[0].message.content?.trim() || '';
       
-      // Update the current card and cards array with the new sentence
-      const updatedCard = { ...currentCard, exampleSentence: sentence };
+      // Güncel kartı güncelle
       const updatedCards = [...cards];
-      updatedCards[currentCardIndex] = updatedCard;
+      updatedCards[currentCardIndex] = {
+        ...updatedCards[currentCardIndex],
+        exampleSentence
+      };
       
-      setCurrentCard(updatedCard);
       setCards(updatedCards);
+      setCurrentCard({
+        ...currentCard,
+        exampleSentence
+      });
+      
+      setShowSentence(true);
     } catch (error) {
       console.error('Error generating example sentence:', error);
     } finally {
@@ -212,23 +269,9 @@ export default function Home() {
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelRow[];
 
-        // Mevcut kartlardaki İngilizce kelimeleri bir Set'e ekleyelim
-        const existingWords = new Set(cards.map(card => card.english.toLowerCase().trim()));
-
-        // Yeni kartları oluştururken tekrar eden kelimeleri atlayalım
+        // Excel'den yüklenen kelimeleri yeni kartlar olarak oluştur
         const newCards: Flashcard[] = shuffleArray(
-          jsonData
-            .filter((row: ExcelRow) => {
-              const english = (row.English || row.english || Object.values(row)[0] || '').toLowerCase().trim();
-              // Eğer kelime zaten varsa false döndür (filtrelenir)
-              if (existingWords.has(english)) {
-                return false;
-              }
-              // Yeni kelimeyi Set'e ekle ve true döndür
-              existingWords.add(english);
-              return true;
-            })
-            .map((row: ExcelRow) => ({
+          jsonData.map((row: ExcelRow) => ({
               english: (row.English || row.english || Object.values(row)[0] || '').trim(),
               turkish: (row.Turkish || row.turkish || Object.values(row)[1] || '').trim(),
               status: 'new',
@@ -236,15 +279,17 @@ export default function Home() {
             }))
         );
 
-        // Yeni kartları mevcut kartlara ekle
-        setCards(prevCards => [...prevCards, ...newCards]);
+        // Kartları sıfırla ve yeni kartları ekle
+        setCards(newCards);
         
-        // Eğer yeni kartlar varsa, ilk kartı göster
+        // İlk kartı göster
         if (newCards.length > 0) {
-          const firstNewCard = newCards[0];
-          setCurrentCard(firstNewCard);
-          setCurrentCardIndex(cards.length); // Yeni eklenen kartların başlangıç indeksi
+          setCurrentCard(newCards[0]);
+          setCurrentCardIndex(0);
         }
+
+        // Çalışma modunu 'new' olarak ayarla
+        setStudyMode('new');
       };
       reader.readAsBinaryString(file);
     }
@@ -266,7 +311,7 @@ export default function Home() {
         // Eğer hala kartlar varsa, kullanıcıya listenin sonuna geldiğini bildiren bir mesaj gösterelim
         alert("Çalışma listesinin sonuna geldiniz. Başa dönmek için 'OK' tuşuna basın.");
         // Kullanıcı isterse başa dönebilir
-        nextIndex = 0;
+      nextIndex = 0;
       } else {
         return; // Hiç kart yoksa işlem yapma
       }
@@ -440,8 +485,8 @@ export default function Home() {
         
         setCurrentCardIndex(selectedCardIndex);
         setCurrentCard(selectedCard);
-        setIsFlipped(false);
-        setShowSentence(false);
+      setIsFlipped(false);
+      setShowSentence(false);
       }
     }
   };
@@ -593,6 +638,45 @@ export default function Home() {
     setShowSentence(false);
   };
 
+  // Kelime düzenleme fonksiyonu
+  const startEditingWord = (word: Flashcard) => {
+    setEditingWord(word);
+    setEditedEnglish(word.english);
+    setEditedTurkish(word.turkish);
+  };
+
+  const saveEditedWord = () => {
+    if (!editingWord || !editedEnglish.trim() || !editedTurkish.trim()) return;
+
+    const updatedCards = cards.map(card =>
+      card.english === editingWord.english
+        ? { ...card, english: editedEnglish, turkish: editedTurkish }
+        : card
+    );
+
+    setCards(updatedCards);
+    
+    // Eğer düzenlenen kelime mevcut kart ise, onu da güncelle
+    if (currentCard.english === editingWord.english) {
+      setCurrentCard({
+        ...currentCard,
+        english: editedEnglish,
+        turkish: editedTurkish
+      });
+    }
+
+    // Düzenleme modunu kapat
+    setEditingWord(null);
+    setEditedEnglish('');
+    setEditedTurkish('');
+  };
+
+  const cancelEditing = () => {
+    setEditingWord(null);
+    setEditedEnglish('');
+    setEditedTurkish('');
+  };
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-blue-100 to-white p-4">
       <div className="w-full max-w-4xl">
@@ -600,12 +684,257 @@ export default function Home() {
           HFK Kelime Öğrenme Platformu
         </h1>
 
-        {/* Saved Lists Section */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-gray-700">Kayıtlı Listeler</h2>
-            <div className="flex gap-2">
-              <label className="px-4 py-2 bg-green-500 text-white rounded-full cursor-pointer hover:bg-green-600 transition-colors">
+        {/* Study Controls - Compact Version */}
+        {cards.length > 0 && (
+          <div className="w-full max-w-md mx-auto mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={() => switchStudyMode('new')}
+                className={`flex-1 py-1.5 px-3 text-sm rounded-full transition-colors ${
+                  studyMode === 'new'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-blue-100'
+                }`}
+              >
+                Yeni Kelimeler ({newWords.length})
+              </button>
+              <button
+                onClick={() => switchStudyMode('practice')}
+                className={`flex-1 py-1.5 px-3 text-sm rounded-full transition-colors ${
+                  studyMode === 'practice'
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-yellow-100'
+                }`}
+              >
+                Pratik Kelimeler ({practiceWords.length})
+              </button>
+              <button
+                onClick={moveToNextCard}
+                className="px-3 py-1.5 text-sm bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
+              >
+                Karıştır
+              </button>
+            </div>
+            {practiceWords.length > 0 && (
+              <button
+                onClick={() => setShowPracticeExam(true)}
+                className="w-full mt-2 py-1.5 px-3 text-sm bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
+              >
+                Pratik Sınavını Başlat ({practiceWords.length} kelime)
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Main Card Area */}
+        <div className="w-full max-w-md mx-auto mb-8">
+          {/* Kelime Kartı */}
+          <div className="section max-w-3xl mx-auto">
+            <div className="relative perspective-1000 mx-auto" style={{ maxWidth: "650px" }}>
+              {/* Navigasyon Butonları */}
+              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 flex justify-between px-4 z-10 pointer-events-none">
+                <button
+                  onClick={moveToPreviousCard}
+                  className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors pointer-events-auto"
+                >
+                  &#8592;
+                </button>
+                <button
+                  onClick={moveToNextCard}
+                  className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors pointer-events-auto"
+                >
+                  &#8594;
+                </button>
+              </div>
+
+              {/* Kelime Kartı */}
+              <div
+                className="relative w-full aspect-[4/3] cursor-pointer transition-transform duration-500 transform-style-3d mb-12"
+                onClick={() => setIsFlipped(!isFlipped)}
+              >
+                {/* Ön Yüz - İngilizce */}
+                <div
+                  className={`absolute w-full h-full flashcard backface-hidden ${
+                    isFlipped ? 'rotate-y-180' : 'rotate-y-0'
+                  }`}
+                >
+                  <div className="flex flex-col items-center justify-between w-full h-full p-6">
+                    <h2 className="flashcard-word mb-4">{currentCard.english}</h2>
+                    
+                    <div className="flex-grow overflow-auto w-full mb-2">
+                      {isLoading ? (
+                        <div className="mt-2 text-gray-500 flex items-center justify-center">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Loading...
+                        </div>
+                      ) : currentCard.exampleSentence && showSentence ? (
+                        <div className="w-full">
+                          <div className="mb-2">
+                            <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 pl-2 text-left">
+                              {currentCard.exampleSentence.split('\n\n')
+                                .filter(section => section.includes('Örnekler:'))
+                                .flatMap(section => 
+                                  section.split('\n')
+                                    .filter(line => line.startsWith('-'))
+                                    .map(line => line.substring(1).trim())
+                                )
+                                .map((sentence, index) => (
+                                  <li key={index} className="italic">{sentence}</li>
+                                ))
+                              }
+                            </ul>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Arka Yüz - Türkçe */}
+                <div
+                  className={`absolute w-full h-full flashcard backface-hidden rotate-y-180 ${
+                    isFlipped ? 'rotate-y-0' : 'rotate-y-180'
+                  }`}
+                >
+                  <div className="flex flex-col items-start text-left overflow-y-auto h-full p-6">
+                    <h2 className="flashcard-word text-center w-full mb-4">{currentCard.turkish}</h2>
+                    
+                    {currentCard.exampleSentence ? (
+                      <div className="w-full">
+                        <div className="mb-4">
+                          <p className="text-gray-700 text-sm leading-relaxed">
+                            <span className="font-bold">{currentCard.english}</span> kelimesi, {currentCard.turkish.toLowerCase()} anlamına gelir ve genellikle belirli bir bağlamda kullanılır. Bu terim, çeşitli durumlarda farklı anlamlar taşıyabilir.
+                          </p>
+                        </div>
+                        
+                        <div className="mb-4">
+                          <p className="font-semibold text-gray-800 mb-1">Anlamı:</p>
+                          <ol className="list-decimal list-inside text-sm text-gray-700 space-y-1 pl-2">
+                            {currentCard.exampleSentence.split('\n\n')
+                              .filter(section => section.includes('Anlamı:'))
+                              .flatMap(section => 
+                                section.split('\n')
+                                  .filter(line => /^\d+\./.test(line))
+                                  .map(line => line.replace(/^\d+\.\s*/, '').trim())
+                              )
+                              .map((meaning, index) => (
+                                <li key={index}>{meaning}</li>
+                              ))
+                            }
+                          </ol>
+                        </div>
+                        
+                        <div className="mb-4">
+                          <p className="font-semibold text-gray-800 mb-1">Özetle:</p>
+                          <p className="text-sm text-gray-700">
+                            {currentCard.exampleSentence.split('\n\n')
+                              .filter(section => section.includes('Özetle:'))
+                              .map(section => section.replace('Özetle:', '').trim())
+                              .join(' ')}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Control Buttons - Outside the Card */}
+          <div className="mt-24 mb-4 flex flex-col items-center space-y-4">
+            {!currentCard.exampleSentence && !isLoading && (
+              <button
+                onClick={() => generateExampleSentence(currentCard.english)}
+                className="w-full max-w-md px-3 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+              >
+                Generate Example
+              </button>
+            )}
+            
+            {currentCard.exampleSentence && !isLoading && (
+              <div className="flex gap-2 w-full max-w-md">
+                <button
+                  onClick={() => setShowSentence(!showSentence)}
+                  className="flex-1 px-3 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+                >
+                  {showSentence ? 'Hide' : 'Show'}
+                </button>
+                <button
+                  onClick={() => generateExampleSentence(currentCard.english)}
+                  className="flex-1 px-3 py-1.5 text-sm bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
+                >
+                  New
+                </button>
+              </div>
+            )}
+
+            <div className="flex justify-center gap-2 w-full max-w-md mt-4">
+              <button
+                onClick={() => handleCardStatus('ok')}
+                className="flex-1 px-3 py-1.5 text-sm bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
+              >
+                Know
+              </button>
+              <button
+                onClick={() => handleCardStatus('practice')}
+                className="flex-1 px-3 py-1.5 text-sm bg-yellow-500 text-white rounded-full hover:bg-yellow-600 transition-colors"
+              >
+                Practice
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Control Sections */}
+        <div className="w-full max-w-2xl mx-auto space-y-2">
+          {/* Lists and Excel Operations Section */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSavedLists(!showSavedLists)}
+              className="w-full bg-gray-100 hover:bg-gray-200 transition-colors py-2.5 rounded-xl text-gray-700 font-medium flex items-center justify-between px-4"
+            >
+              <span>Liste İşlemleri</span>
+              <svg
+                className={`w-5 h-5 transition-transform ${showSavedLists ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {showSavedLists && (
+              <div className="bg-white rounded-xl p-4 shadow-lg mt-2">
+                {/* Main Buttons */}
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <button
+                    onClick={() => {
+                      setCards([]);
+                      setCurrentCard({
+                        english: 'Yeni Liste',
+                        turkish: 'Kelime eklemek için "Yeni Kelime Ekle" butonunu kullanın',
+                        status: 'new'
+                      });
+                      setCurrentCardIndex(0);
+                      setCurrentListName(null);
+                      setShowAddWordForm(true);
+                    }}
+                    className="bg-purple-500 hover:bg-purple-600 transition-colors py-2 rounded-xl text-white text-sm font-medium"
+                  >
+                    Yeni Liste Oluştur
+                  </button>
+                  <button
+                    onClick={() => setShowAddWordForm(true)}
+                    className="bg-blue-500 hover:bg-blue-600 transition-colors py-2 rounded-xl text-white text-sm font-medium"
+                  >
+                    Yeni Kelime Ekle
+                  </button>
+                  <label className="bg-green-500 hover:bg-green-600 transition-colors py-2 rounded-xl text-white text-sm font-medium text-center cursor-pointer">
                 Liste Yükle
                 <input
                   type="file"
@@ -616,47 +945,65 @@ export default function Home() {
               </label>
               <button
                 onClick={() => setShowSaveDialog(true)}
-                className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+                    className="bg-yellow-500 hover:bg-yellow-600 transition-colors py-2 rounded-xl text-white text-sm font-medium"
               >
                 {currentListName ? 'Listeyi Farklı Kaydet' : 'Listeyi Kaydet'}
               </button>
+                </div>
+
+                {/* Excel Operations */}
+                <div className="border-t border-gray-200 pt-4 mb-4">
+                  <h3 className="text-gray-700 font-medium mb-3">Excel İşlemleri</h3>
+                  <div className="flex gap-2">
+                    <label className="flex-1 bg-blue-500 hover:bg-blue-600 transition-colors py-2 rounded-xl text-white text-sm font-medium text-center cursor-pointer">
+                      Excel Dosyası Yükle
+                      <input
+                        type="file"
+                        accept=".xlsx,.xls"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                    {cards.length > 0 && (
               <button
-                onClick={() => setShowAddWordForm(true)}
-                className="px-4 py-2 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
+                        onClick={saveToExcel}
+                        className="flex-1 bg-green-500 hover:bg-green-600 transition-colors py-2 rounded-xl text-white text-sm font-medium"
               >
-                Yeni Kelime Ekle
+                        Excel Olarak Kaydet
               </button>
+                    )}
             </div>
           </div>
           
           {/* Add Word Form */}
           {showAddWordForm && (
-            <div className="mb-4 p-4 bg-white rounded-xl shadow-md">
+                  <div className="border-t border-gray-200 pt-4 mb-4">
+                    <h3 className="text-gray-700 font-medium mb-3">Yeni Kelime Ekle</h3>
               <div className="flex flex-col gap-3">
                 <input
                   type="text"
                   value={newWord.english}
                   onChange={(e) => setNewWord(prev => ({ ...prev, english: e.target.value }))}
                   placeholder="İngilizce kelime"
-                  className="px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
                 <input
                   type="text"
                   value={newWord.turkish}
                   onChange={(e) => setNewWord(prev => ({ ...prev, turkish: e.target.value }))}
                   placeholder="Türkçe kelime"
-                  className="px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
                 <div className="flex gap-2 justify-end">
                   <button
                     onClick={() => setShowAddWordForm(false)}
-                    className="px-4 py-2 bg-gray-500 text-white rounded-full hover:bg-gray-600 transition-colors"
+                          className="px-4 py-2 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-colors"
                   >
                     İptal
                   </button>
                   <button
                     onClick={addNewWord}
-                    className="px-4 py-2 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
+                          className="px-4 py-2 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors"
                   >
                     Ekle
                   </button>
@@ -667,19 +1014,20 @@ export default function Home() {
 
           {/* Save Dialog */}
           {showSaveDialog && (
-            <div className="mb-4 p-4 bg-white rounded-xl shadow-md">
+                  <div className="border-t border-gray-200 pt-4 mb-4">
+                    <h3 className="text-gray-700 font-medium mb-3">Listeyi Kaydet</h3>
               <div className="flex flex-col gap-3">
                 <input
                   type="text"
                   value={listName}
                   onChange={(e) => setListName(e.target.value)}
                   placeholder="Liste adı girin"
-                  className="px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                <div className="flex gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => setSaveCategory('all')}
-                    className={`flex-1 py-2 px-4 rounded-full transition-colors ${
+                          className={`py-2 px-4 rounded-xl transition-colors ${
                       saveCategory === 'all'
                         ? 'bg-blue-500 text-white'
                         : 'bg-gray-200 text-gray-700 hover:bg-blue-100'
@@ -689,23 +1037,23 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => setSaveCategory('ok')}
-                    className={`flex-1 py-2 px-4 rounded-full transition-colors ${
+                          className={`py-2 px-4 rounded-xl transition-colors ${
                       saveCategory === 'ok'
                         ? 'bg-green-500 text-white'
                         : 'bg-gray-200 text-gray-700 hover:bg-green-100'
                     }`}
                   >
-                    Bildiğim Kelimeler ({knownWords.length})
+                          Bildiğim ({knownWords.length})
                   </button>
                   <button
                     onClick={() => setSaveCategory('practice')}
-                    className={`flex-1 py-2 px-4 rounded-full transition-colors ${
+                          className={`py-2 px-4 rounded-xl transition-colors ${
                       saveCategory === 'practice'
                         ? 'bg-yellow-500 text-white'
                         : 'bg-gray-200 text-gray-700 hover:bg-yellow-100'
                     }`}
                   >
-                    Pratik Gereken ({practiceWords.length})
+                          Pratik ({practiceWords.length})
                   </button>
                 </div>
                 <div className="flex gap-2 justify-end mt-2">
@@ -715,13 +1063,13 @@ export default function Home() {
                       setListName('');
                       setSaveCategory('all');
                     }}
-                    className="px-4 py-2 bg-gray-500 text-white rounded-full hover:bg-gray-600 transition-colors"
+                          className="px-4 py-2 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-colors"
                   >
                     İptal
                   </button>
                   <button
                     onClick={saveCurrentList}
-                    className="px-4 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
+                          className="px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors"
                   >
                     Kaydet
                   </button>
@@ -731,6 +1079,8 @@ export default function Home() {
           )}
 
           {/* Saved Lists */}
+                <div className="border-t border-gray-200 pt-4">
+                  <h3 className="text-gray-700 font-medium mb-3">Kayıtlı Listeler</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {savedLists.map((list) => (
               <div
@@ -744,19 +1094,19 @@ export default function Home() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => loadSavedList(list)}
-                      className="px-3 py-1 bg-blue-500 text-white text-sm rounded-full hover:bg-blue-600 transition-colors"
+                              className="px-3 py-1 bg-blue-500 text-white text-sm rounded-xl hover:bg-blue-600 transition-colors"
                     >
                       Yükle
                     </button>
                     <button
                       onClick={() => downloadList(list)}
-                      className="px-3 py-1 bg-green-500 text-white text-sm rounded-full hover:bg-green-600 transition-colors"
+                              className="px-3 py-1 bg-green-500 text-white text-sm rounded-xl hover:bg-green-600 transition-colors"
                     >
                       İndir
                     </button>
                     <button
                       onClick={() => deleteSavedList(list.name)}
-                      className="px-3 py-1 bg-red-500 text-white text-sm rounded-full hover:bg-red-600 transition-colors"
+                              className="px-3 py-1 bg-red-500 text-white text-sm rounded-xl hover:bg-red-600 transition-colors"
                     >
                       Sil
                     </button>
@@ -769,43 +1119,36 @@ export default function Home() {
               </div>
             ))}
           </div>
+                </div>
+              </div>
+            )}
         </div>
 
-        {/* File Upload and Save Buttons */}
-        <div className="mb-8 text-center flex justify-center gap-4">
-          <label className="bg-blue-500 text-white px-4 py-2 rounded-full cursor-pointer hover:bg-blue-600 transition-colors">
-            Excel Dosyası Yükle
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-          </label>
-          {cards.length > 0 && (
+          {/* Word List Section */}
+          <div className="relative">
             <button
-              onClick={saveToExcel}
-              className="bg-green-500 text-white px-4 py-2 rounded-full hover:bg-green-600 transition-colors"
+              onClick={() => setActiveList(activeList ? null : 'new')}
+              className="w-full bg-gray-100 hover:bg-gray-200 transition-colors py-2.5 rounded-xl text-gray-700 font-medium flex items-center justify-between px-4"
             >
-              Cümlelerle Kaydet
+              <span>Kelime Listesi</span>
+              <svg
+                className={`w-5 h-5 transition-transform ${activeList ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
-          )}
-        </div>
-        {cards.length > 0 && (
-          <p className="mt-2 text-sm text-gray-600 text-center">
-            Toplam {cards.length} kelime yüklendi
-          </p>
-        )}
-        
-        {/* Main Card Area */}
-        <div className="w-full max-w-md mx-auto mb-8">
-          {/* Study Mode Selector */}
-          {cards.length > 0 && (
+
+            {activeList && (
+              <div className="bg-white rounded-xl p-4 shadow-lg mt-2">
+                {/* Liste Seçim Butonları */}
             <div className="flex gap-2 mb-4">
               <button
-                onClick={() => switchStudyMode('new')}
-                className={`flex-1 py-2 rounded-full transition-colors ${
-                  studyMode === 'new'
+                    onClick={() => setActiveList('new')}
+                    className={`flex-1 py-2 px-4 rounded-xl text-sm transition-colors ${
+                      activeList === 'new'
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-blue-100'
                 }`}
@@ -813,282 +1156,121 @@ export default function Home() {
                 Yeni Kelimeler ({newWords.length})
               </button>
               <button
-                onClick={() => switchStudyMode('practice')}
-                className={`flex-1 py-2 rounded-full transition-colors ${
-                  studyMode === 'practice'
+                    onClick={() => setActiveList('practice')}
+                    className={`flex-1 py-2 px-4 rounded-xl text-sm transition-colors ${
+                      activeList === 'practice'
                     ? 'bg-yellow-500 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-yellow-100'
                 }`}
               >
-                Pratik Kelimeler ({practiceWords.length})
+                    Pratik ({practiceWords.length})
               </button>
-            </div>
-          )}
-
-          {/* Shuffle Button */}
-          {cards.length > 0 && (
             <button
-              onClick={moveToNextCard}
-              className="w-full mb-4 px-4 py-2 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
-            >
-              Kelimeleri Karıştır
-            </button>
-          )}
-
-          {/* Flashcard */}
-          <div className="relative w-[80%] mx-auto aspect-[3/2] perspective-1000">
-            {/* Navigation Buttons */}
-            <button
-              onClick={moveToPreviousCard}
-              className="absolute left-[-50px] top-1/2 -translate-y-1/2 z-10 bg-gray-200 hover:bg-gray-300 text-gray-600 w-10 h-10 rounded-full flex items-center justify-center transition-colors"
-              style={{ outline: 'none' }}
-            >
-              &#8592;
-            </button>
-            <button
-              onClick={moveToNextCard}
-              className="absolute right-[-50px] top-1/2 -translate-y-1/2 z-10 bg-gray-200 hover:bg-gray-300 text-gray-600 w-10 h-10 rounded-full flex items-center justify-center transition-colors"
-              style={{ outline: 'none' }}
-            >
-              &#8594;
-            </button>
-
-            <div
-              className="relative w-full h-full cursor-pointer transition-transform duration-500 transform-style-3d"
-              onClick={() => setIsFlipped(!isFlipped)}
-            >
-              {/* Front side */}
-              <div
-                className={`absolute w-full h-full bg-blue-50 rounded-xl shadow-lg p-6 flex flex-col items-center justify-center backface-hidden ${
-                  isFlipped ? 'rotate-y-180' : ''
-                }`}
-              >
-                <p className="text-2xl font-semibold text-gray-800 mb-4">
-                  {currentCard.english}
-                </p>
-                {!isLoading && !currentCard.exampleSentence && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      generateExampleSentence(currentCard.english);
-                    }}
-                    className="mt-2 px-4 py-1 bg-indigo-500 text-white text-sm rounded-full hover:bg-indigo-600 transition-colors"
-                  >
-                    Örnek Cümle Oluştur
-                  </button>
-                )}
-                {!isLoading && currentCard.exampleSentence && !showSentence && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowSentence(true);
-                    }}
-                    className="mt-2 px-4 py-1 bg-indigo-500 text-white text-sm rounded-full hover:bg-indigo-600 transition-colors"
-                  >
-                    Cümleyi Göster
-                  </button>
-                )}
-                {isLoading && (
-                  <p className="text-sm text-gray-500 mt-2">Cümle oluşturuluyor...</p>
-                )}
-                {currentCard.exampleSentence && showSentence && (
-                  <div className="mt-2 text-center">
-                    <p className="text-sm text-gray-600 italic">
-                      {currentCard.exampleSentence}
-                    </p>
-                    <div className="flex flex-col gap-2 mt-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowSentence(false);
-                        }}
-                        className="px-3 py-1 bg-gray-400 text-white text-xs rounded-full hover:bg-gray-500 transition-colors"
-                      >
-                        Cümleyi Gizle
-                      </button>
-                      {!isLoading && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            generateExampleSentence(currentCard.english);
-                          }}
-                          className="px-3 py-1 bg-indigo-500 text-white text-xs rounded-full hover:bg-indigo-600 transition-colors"
-                        >
-                          Yeni Cümle Oluştur
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Back side */}
-              <div
-                className={`absolute w-full h-full bg-green-50 rounded-xl shadow-lg p-6 flex items-center justify-center backface-hidden rotate-y-180 ${
-                  isFlipped ? 'rotate-y-0' : ''
-                }`}
-              >
-                <p className="text-2xl font-semibold text-gray-800">
-                  {currentCard.turkish}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Control Buttons */}
-          <div className="flex justify-center gap-4 mt-8">
-            <button
-              onClick={() => handleCardStatus('ok')}
-              className="px-6 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
-            >
-              OK
-            </button>
-            <button
-              onClick={() => handleCardStatus('practice')}
-              className="px-6 py-2 bg-yellow-500 text-white rounded-full hover:bg-yellow-600 transition-colors"
-            >
-              Need More Practice
-            </button>
-          </div>
-
-          {/* Progress Indicators */}
-          <div className="mt-8 flex justify-between text-sm text-gray-600">
-            <span>Öğrenildi: {mastered}</span>
-            <span>Pratik Gerekli: {practice}</span>
-          </div>
-        </div>
-
-        {/* Word Lists Section */}
-        <div className="mt-8 bg-white rounded-xl p-4 shadow-lg">
-          {/* List Selection Buttons */}
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setActiveList(activeList === 'ok' ? null : 'ok')}
-              className={`flex-1 py-2 px-4 rounded-full transition-colors ${
+                    onClick={() => setActiveList('ok')}
+                    className={`flex-1 py-2 px-4 rounded-xl text-sm transition-colors ${
                 activeList === 'ok'
                   ? 'bg-green-500 text-white'
                   : 'bg-gray-200 text-gray-700 hover:bg-green-100'
               }`}
             >
-              Bildiğim Kelimeler ({knownWords.length})
-            </button>
-            <button
-              onClick={() => setActiveList(activeList === 'new' ? null : 'new')}
-              className={`flex-1 py-2 px-4 rounded-full transition-colors ${
-                activeList === 'new'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-blue-100'
-              }`}
-            >
-              Yeni Kelimeler ({newWords.length})
-            </button>
-            <button
-              onClick={() => setActiveList(activeList === 'practice' ? null : 'practice')}
-              className={`flex-1 py-2 px-4 rounded-full transition-colors ${
-                activeList === 'practice'
-                  ? 'bg-yellow-500 text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-yellow-100'
-              }`}
-            >
-              Pratik Gereken ({practiceWords.length})
+                    Bildiğim ({knownWords.length})
             </button>
           </div>
 
-          {/* Active List Content */}
-          {activeList && (
-            <div className="h-60 mt-4">
-              <List
-                height={240}
-                itemCount={
-                  activeList === 'ok'
-                    ? knownWords.length
-                    : activeList === 'new'
-                    ? newWords.length
-                    : practiceWords.length
-                }
-                itemSize={50}
-                width="100%"
-              >
-                {({ index, style }: { index: number; style: React.CSSProperties }) => {
-                  const word =
-                    activeList === 'ok'
-                      ? knownWords[index]
-                      : activeList === 'new'
-                      ? newWords[index]
-                      : practiceWords[index];
-                  
-                  return (
-                    <div style={style}>
-                      <div className={`p-2 rounded mb-2 text-sm flex justify-between items-center ${
-                        activeList === 'ok'
-                          ? 'bg-green-50'
-                          : activeList === 'new'
-                          ? 'bg-blue-50'
-                          : 'bg-yellow-50'
-                      }`}>
-                        <div>
-                          <span className="font-medium">{word.english}</span>
-                          <span className="text-gray-500"> - {word.turkish}</span>
+                {/* Kelime Listesi */}
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {(activeList === 'new' ? newWords :
+                    activeList === 'practice' ? practiceWords :
+                    activeList === 'ok' ? knownWords : []
+                  ).map((card, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                      {editingWord && editingWord.english === card.english ? (
+                        <div className="flex-1 flex flex-col gap-2">
+                          <input
+                            type="text"
+                            value={editedEnglish}
+                            onChange={(e) => setEditedEnglish(e.target.value)}
+                            className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="İngilizce"
+                          />
+                          <input
+                            type="text"
+                            value={editedTurkish}
+                            onChange={(e) => setEditedTurkish(e.target.value)}
+                            className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Türkçe"
+                          />
+                          <div className="flex gap-2 mt-1">
+            <button
+                              onClick={saveEditedWord}
+                              className="flex-1 px-2 py-1 text-xs rounded-full bg-green-500 text-white hover:bg-green-600 transition-colors"
+                            >
+                              Kaydet
+            </button>
+            <button
+                              onClick={cancelEditing}
+                              className="flex-1 px-2 py-1 text-xs rounded-full bg-gray-500 text-white hover:bg-gray-600 transition-colors"
+                            >
+                              İptal
+            </button>
+          </div>
                         </div>
-                        <div className="flex gap-2">
-                          {activeList === 'ok' && (
+                      ) : (
                             <>
+                          <div className="flex-1" onClick={() => startEditingWord(card)}>
+                            <p className="font-medium">{card.english}</p>
+                            <p className="text-sm text-gray-600">{card.turkish}</p>
+                          </div>
+                          <div className="flex gap-2">
                               <button
-                                onClick={() => changeWordStatus(word, 'new')}
-                                className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full hover:bg-blue-600 transition-colors"
+                              onClick={() => startEditingWord(card)}
+                              className="px-2 py-1 text-xs rounded-full bg-gray-500 text-white hover:bg-gray-600 transition-colors"
                               >
-                                Yeni
+                              Düzenle
                               </button>
+                            {activeList !== 'ok' && (
                               <button
-                                onClick={() => changeWordStatus(word, 'practice')}
-                                className="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full hover:bg-yellow-600 transition-colors"
-                              >
-                                Pratik
-                              </button>
-                            </>
-                          )}
-                          {activeList === 'new' && (
-                            <>
-                              <button
-                                onClick={() => changeWordStatus(word, 'ok')}
-                                className="px-2 py-1 bg-green-500 text-white text-xs rounded-full hover:bg-green-600 transition-colors"
+                                onClick={() => changeWordStatus(card, 'ok')}
+                                className="px-2 py-1 text-xs rounded-full bg-green-500 text-white hover:bg-green-600 transition-colors"
                               >
                                 Biliyorum
                               </button>
+                          )}
+                            {activeList !== 'practice' && (
                               <button
-                                onClick={() => changeWordStatus(word, 'practice')}
-                                className="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full hover:bg-yellow-600 transition-colors"
+                                onClick={() => changeWordStatus(card, 'practice')}
+                                className="px-2 py-1 text-xs rounded-full bg-yellow-500 text-white hover:bg-yellow-600 transition-colors"
                               >
                                 Pratik
                               </button>
-                            </>
                           )}
-                          {activeList === 'practice' && (
-                            <>
+                            {activeList !== 'new' && (
                               <button
-                                onClick={() => changeWordStatus(word, 'new')}
-                                className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full hover:bg-blue-600 transition-colors"
+                                onClick={() => changeWordStatus(card, 'new')}
+                                className="px-2 py-1 text-xs rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors"
                               >
                                 Yeni
                               </button>
-                              <button
-                                onClick={() => changeWordStatus(word, 'ok')}
-                                className="px-2 py-1 bg-green-500 text-white text-xs rounded-full hover:bg-green-600 transition-colors"
-                              >
-                                Biliyorum
-                              </button>
+                            )}
+                          </div>
                             </>
                           )}
                         </div>
+                  ))}
                       </div>
-                    </div>
-                  );
-                }}
-              </List>
             </div>
           )}
         </div>
       </div>
+      </div>
+
+      {/* Practice Exam Modal */}
+      {showPracticeExam && (
+        <PracticeExam
+          words={practiceWords}
+          onClose={() => setShowPracticeExam(false)}
+        />
+      )}
     </main>
   );
 }
