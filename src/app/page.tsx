@@ -50,7 +50,6 @@ export default function Home() {
     status: 'new'
   });
   const [saveCategory, setSaveCategory] = useState<'all' | 'new' | 'ok' | 'practice'>('all');
-  const [showStudyControls, setShowStudyControls] = useState(false);
   const [showSavedLists, setShowSavedLists] = useState(false);
   const [showPracticeExam, setShowPracticeExam] = useState(false);
   

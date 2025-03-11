@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import OpenAI from 'openai';
 
 interface PracticeQuestion {
@@ -30,7 +30,7 @@ export default function PracticeExam({ words, onClose }: PracticeExamProps) {
     dangerouslyAllowBrowser: true
   });
 
-  const generateQuestions = async () => {
+  const generateQuestions = useCallback(async () => {
     setLoading(true);
     const generatedQuestions: PracticeQuestion[] = [];
     
@@ -174,7 +174,7 @@ Return ONLY a JSON object with the following format:
     const shuffledQuestions = [...generatedQuestions].sort(() => Math.random() - 0.5);
     setQuestions(shuffledQuestions);
     setLoading(false);
-  };
+  }, [words, openai]);
 
   useEffect(() => {
     generateQuestions();
