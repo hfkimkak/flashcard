@@ -30,10 +30,6 @@ export default function PracticeExam({ words, onClose }: PracticeExamProps) {
     dangerouslyAllowBrowser: true
   });
 
-  useEffect(() => {
-    generateQuestions();
-  }, []);
-
   const generateQuestions = async () => {
     setLoading(true);
     const generatedQuestions: PracticeQuestion[] = [];
@@ -179,6 +175,10 @@ Return ONLY a JSON object with the following format:
     setQuestions(shuffledQuestions);
     setLoading(false);
   };
+
+  useEffect(() => {
+    generateQuestions();
+  }, [generateQuestions]);
 
   const handleAnswer = (questionIndex: number, answer: string) => {
     const actualIndex = currentPage * questionsPerPage + questionIndex;

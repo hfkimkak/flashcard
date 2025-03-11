@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import OpenAI from 'openai';
-import { FixedSizeList as List } from 'react-window';
 import PracticeExam from './components/PracticeExam';
 
 interface Flashcard {
@@ -53,7 +52,6 @@ export default function Home() {
   const [saveCategory, setSaveCategory] = useState<'all' | 'new' | 'ok' | 'practice'>('all');
   const [showStudyControls, setShowStudyControls] = useState(false);
   const [showSavedLists, setShowSavedLists] = useState(false);
-  const [showExcelControls, setShowExcelControls] = useState(false);
   const [showPracticeExam, setShowPracticeExam] = useState(false);
   
   // Kelime düzenleme için state'ler
@@ -153,13 +151,12 @@ export default function Home() {
   // Kartlar değiştiğinde listeyi güncelle
   useEffect(() => {
     if (currentListName && cards.length > 0) {
-      // Bir sonraki render'da çalışacak şekilde zamanlayalım
       const timeoutId = setTimeout(() => {
-      updateCurrentList();
+        updateCurrentList();
       }, 0);
       return () => clearTimeout(timeoutId);
     }
-  }, [cards, updateCurrentList]);
+  }, [cards, updateCurrentList, currentListName]);
 
   const generateExampleSentence = async (word: string) => {
     try {
@@ -490,9 +487,6 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
       }
     }
   };
-
-  const mastered = cards.filter(card => card.status === 'ok').length;
-  const practice = cards.filter(card => card.status === 'practice').length;
 
   // Add these new computed values
   const knownWords = cards.filter(card => card.status === 'ok');
