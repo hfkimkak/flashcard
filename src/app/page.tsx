@@ -698,15 +698,26 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
               </button>
             </div>
             {practiceWords.length > 0 && (
-              <button
-                onClick={() => {
-                  localStorage.setItem('currentListName', currentListName || '');
-                  window.open('/practice-exam', '_blank');
-                }}
-                className="w-full mt-2 py-1.5 px-3 text-sm bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
-              >
-                Pratik Sınavını Başlat ({practiceWords.length} kelime)
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('currentListName', currentListName || '');
+                    window.open('/practice-exam', '_blank');
+                  }}
+                  className="w-full mt-2 py-1.5 px-3 text-sm bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
+                >
+                  Pratik Sınavını Başlat ({practiceWords.length} kelime)
+                </button>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('currentListName', currentListName || '');
+                    window.open('/grammar-exam', '_blank');
+                  }}
+                  className="w-full mt-2 py-1.5 px-3 text-sm bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
+                >
+                  Dilbilgisi Sınavını Başlat ({practiceWords.length} kelime)
+                </button>
+              </>
             )}
           </div>
         )}
