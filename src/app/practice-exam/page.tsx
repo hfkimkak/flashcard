@@ -1,13 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+// Kullanılmayan import'u kaldır
+// import { useSearchParams } from 'next/navigation';
 
 interface Word {
   english: string;
   turkish: string;
   status: 'new' | 'ok' | 'practice';
   exampleSentence?: string;
+}
+
+interface SavedList {
+  name: string;
+  cards: Word[];
+  createdAt: string;
 }
 
 export default function PracticeExam() {
@@ -19,25 +26,45 @@ export default function PracticeExam() {
   const [shuffledOptions, setShuffledOptions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const shuffleArray = useCallback(<T,>(array: T[]): T[] => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }, []);
+
+  const generateOptions = useCallback((index: number, wordList: Word[]) => {
+    const correctAnswer = wordList[index].turkish;
+    const otherWords = wordList.filter((_, i) => i !== index);
+    const wrongOptions = otherWords
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 3)
+      .map(word => word.turkish);
+    
+    return shuffleArray([correctAnswer, ...wrongOptions]);
+  }, [shuffleArray]);
+
   useEffect(() => {
     // Get practice words from localStorage
     const savedLists = localStorage.getItem('wordLists');
     if (savedLists) {
-      const lists = JSON.parse(savedLists);
+      const lists = JSON.parse(savedLists) as SavedList[];
       const currentListName = localStorage.getItem('currentListName');
       
       let practiceWords: Word[] = [];
       
       if (currentListName) {
         // Belirli bir liste seçilmişse sadece o listedeki pratik kelimeleri al
-        const currentList = lists.find((list: any) => list.name === currentListName);
+        const currentList = lists.find((list) => list.name === currentListName);
         if (currentList) {
-          practiceWords = currentList.cards.filter((card: Word) => card.status === 'practice');
+          practiceWords = currentList.cards.filter((card) => card.status === 'practice');
         }
       } else {
         // Liste seçilmemişse tüm listelerdeki pratik kelimeleri birleştir
-        practiceWords = lists.flatMap((list: any) => 
-          list.cards.filter((card: Word) => card.status === 'practice')
+        practiceWords = lists.flatMap((list) => 
+          list.cards.filter((card) => card.status === 'practice')
         );
       }
       
@@ -52,27 +79,7 @@ export default function PracticeExam() {
       }
     }
     setIsLoading(false);
-  }, []);
-
-  const generateOptions = (index: number, wordList: Word[]) => {
-    const correctAnswer = wordList[index].turkish;
-    const otherWords = wordList.filter((_, i) => i !== index);
-    const wrongOptions = otherWords
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 3)
-      .map(word => word.turkish);
-    
-    return shuffleArray([correctAnswer, ...wrongOptions]);
-  };
-
-  const shuffleArray = <T,>(array: T[]): T[] => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  };
+  }, [shuffleArray, generateOptions]);
 
   const handleAnswer = (answer: string) => {
     const newAnswers = [...userAnswers];

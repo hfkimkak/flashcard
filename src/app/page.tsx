@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import OpenAI from 'openai';
 
@@ -54,10 +54,10 @@ export default function Home() {
   const [editedEnglish, setEditedEnglish] = useState('');
   const [editedTurkish, setEditedTurkish] = useState('');
 
-  const openai = new OpenAI({
+  const openai = useMemo(() => new OpenAI({
     apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true
-  });
+  }), []);
 
   // Load saved lists from localStorage on component mount
   useEffect(() => {
