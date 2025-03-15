@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import OpenAI from 'openai';
-import PracticeExam from './components/PracticeExam';
 
 interface Flashcard {
   english: string;
@@ -51,19 +50,9 @@ export default function Home() {
   });
   const [saveCategory, setSaveCategory] = useState<'all' | 'new' | 'ok' | 'practice'>('all');
   const [showSavedLists, setShowSavedLists] = useState(false);
-  const [showPracticeExam, setShowPracticeExam] = useState(false);
-  
-  // Kelime düzenleme için state'ler
   const [editingWord, setEditingWord] = useState<Flashcard | null>(null);
   const [editedEnglish, setEditedEnglish] = useState('');
   const [editedTurkish, setEditedTurkish] = useState('');
-
-  // Touch handling için state'ler
-  // const [touchStart, setTouchStart] = useState<number | null>(null);
-  // const [touchEnd, setTouchEnd] = useState<number | null>(null);
-
-  // Minimum kaydırma mesafesi
-  // const minSwipeDistance = 50;
 
   const openai = new OpenAI({
     apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
@@ -710,7 +699,10 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
             </div>
             {practiceWords.length > 0 && (
               <button
-                onClick={() => setShowPracticeExam(true)}
+                onClick={() => {
+                  localStorage.setItem('currentListName', currentListName || '');
+                  window.open('/practice-exam', '_blank');
+                }}
                 className="w-full mt-2 py-1.5 px-3 text-sm bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
               >
                 Pratik Sınavını Başlat ({practiceWords.length} kelime)
@@ -1256,14 +1248,6 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
         </div>
       </div>
       </div>
-
-      {/* Practice Exam Modal */}
-      {showPracticeExam && (
-        <PracticeExam
-          words={practiceWords}
-          onClose={() => setShowPracticeExam(false)}
-        />
-      )}
     </main>
   );
 }

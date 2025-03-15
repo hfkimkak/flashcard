@@ -105,15 +105,62 @@ Return ONLY a JSON object with the following format:
           // Ensure sentence contains exactly 10 underscores as placeholder
           const placeholder = '__________';
           if (!result.sentence.includes(placeholder)) {
-            result.sentence = result.sentence.replace(/_{5,}/, placeholder);
+            console.log('Placeholder not found in sentence, attempting to fix...');
+            
+            // Önce herhangi bir alt çizgi var mı kontrol et
+            if (result.sentence.includes('_')) {
+              // Herhangi bir sayıda alt çizgi varsa, bunları 10 alt çizgiye dönüştür
+              result.sentence = result.sentence.replace(/_{1,}/g, placeholder);
+              console.log('Fixed underscore pattern:', result.sentence);
+            } else {
+              // Alt çizgi yoksa, cümleyi analiz et ve uygun bir yer bul
+              
+              // 1. Cümleyi kelimelere ayır
+              const words = result.sentence.split(' ');
+              
+              // 2. Cümlenin ortasına yakın bir yerde placeholder ekle
+              const middleIndex = Math.floor(words.length / 2);
+              
+              // 3. Noktalama işaretlerini kontrol et ve uygun bir yer bul
+              let insertIndex = middleIndex;
+              
+              // Noktalama işaretlerinden sonra eklemeyi tercih et
+              for (let i = 0; i < words.length; i++) {
+                if (words[i].endsWith('.') || words[i].endsWith(',') || words[i].endsWith(':') || words[i].endsWith(';')) {
+                  insertIndex = i + 1;
+                  if (insertIndex < words.length) {
+                    break;
+                  }
+                }
+              }
+              
+              // 4. Placeholder'ı ekle
+              if (insertIndex < words.length) {
+                words[insertIndex] = placeholder;
+                result.sentence = words.join(' ');
+                console.log('Added placeholder in the middle:', result.sentence);
+              } else {
+                // Son çare: cümlenin sonuna ekle
+                result.sentence = result.sentence + ' ' + placeholder;
+                console.log('Added placeholder at the end:', result.sentence);
+              }
+            }
+            
+            // Yine de placeholder yoksa, tamamen yeni bir cümle oluştur
             if (!result.sentence.includes(placeholder)) {
-              throw new Error('Sentence does not contain proper placeholder');
+              console.log('Still no placeholder, creating a new sentence');
+              result.sentence = `The word ${placeholder} is a ${result.wordType} that can be used in various contexts.`;
+              console.log('Created new sentence:', result.sentence);
             }
           }
 
           // Check if the word appears in the sentence
           if (result.sentence.toLowerCase().includes(word.english.toLowerCase())) {
-            throw new Error('Sentence contains the target word');
+            console.log('Target word found in sentence, removing it');
+            // Kelimeyi cümleden çıkar ve yerine placeholder koy
+            const regex = new RegExp(word.english, 'gi');
+            result.sentence = result.sentence.replace(regex, placeholder);
+            console.log('Fixed sentence:', result.sentence);
           }
           
           // Alternatifleri kontrol et ve tekrarları önle
