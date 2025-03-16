@@ -185,11 +185,15 @@ Example for "sprint":
         if (currentListName) {
           const currentList = lists.find((list) => list.name === currentListName);
           if (currentList) {
-            practiceWords = currentList.cards.filter((card) => card.status === 'practice');
+            practiceWords = currentList.cards
+              .filter((card) => card.status === 'practice')
+              .map(card => ({ ...card, correctCount: 0 })); // Reset correctCount for exam session
           }
         } else {
           practiceWords = lists.flatMap((list) => 
-            list.cards.filter((card) => card.status === 'practice')
+            list.cards
+              .filter((card) => card.status === 'practice')
+              .map(card => ({ ...card, correctCount: 0 })) // Reset correctCount for exam session
           );
         }
 
@@ -233,33 +237,6 @@ Example for "sprint":
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [currentQuestionIndex]);
 
-  const updateWordStatus = useCallback((words: Word[]) => {
-    const savedLists = localStorage.getItem('wordLists');
-    if (!savedLists) return;
-
-    const lists = JSON.parse(savedLists) as SavedList[];
-    const currentListName = localStorage.getItem('currentListName');
-    
-    const updatedLists = lists.map(list => {
-      const updatedCards = list.cards.map(card => {
-        const matchingWord = words.find(w => w.english === card.english);
-        if (matchingWord) {
-          // 5 kez doğru bilindiyse practice'den ok'a geçir
-          const newStatus = matchingWord.correctCount >= 5 ? 'ok' : card.status;
-          return {
-            ...card,
-            status: newStatus,
-            correctCount: matchingWord.correctCount
-          };
-        }
-        return card;
-      });
-      return { ...list, cards: updatedCards };
-    });
-
-    localStorage.setItem('wordLists', JSON.stringify(updatedLists));
-  }, []);
-
   const getColorByCorrectCount = (count: number) => {
     switch(count) {
       case 1: return 'bg-blue-50';
@@ -274,7 +251,7 @@ Example for "sprint":
   const finishExam = () => {
     const updatedWords = [...words];
     
-    // Her doğru cevap için correctCount'u güncelle
+    // Her doğru cevap için correctCount'u güncelle (sadece sınav oturumu için)
     questions.forEach((question, index) => {
       if (userAnswers[index] === question.correctAnswer) {
         const wordIndex = updatedWords.findIndex(w => w.english === question.word);
@@ -287,8 +264,8 @@ Example for "sprint":
       }
     });
 
-    // Word statülerini güncelle
-    updateWordStatus(updatedWords);
+    // Word statülerini güncelleme kısmını kaldır
+    // updateWordStatus(updatedWords); // Bu satırı kaldırıyoruz
     setWords(updatedWords);
 
     // Skoru hesapla
@@ -305,7 +282,11 @@ Example for "sprint":
     setShowResults(false);
     setScore(0);
     setIsLoading(true);
-    await generateAllQuestions(words);
+    
+    // Filter out words that have been correctly answered 5 times
+    const remainingWords = words.filter(word => word.correctCount < 5);
+    await generateAllQuestions(remainingWords);
+    
     setIsLoading(false);
   };
 
@@ -338,6 +319,44 @@ Example for "sprint":
       </div>
     );
   }
+
+  if (questions.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Sorular oluşturulamadı</h2>
+          <p className="text-gray-600 mb-4">Lütfen sayfayı yenileyip tekrar deneyin.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            Yenile
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const currentQuestion = questions[currentQuestionIndex];
+  if (!currentQuestion) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Bir hata oluştu</h2>
+          <p className="text-gray-600 mb-4">Soru yüklenemedi. Lütfen sayfayı yenileyip tekrar deneyin.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            Yenile
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const currentWord = words.find(w => w.english === currentQuestion.word);
+  const correctCount = currentWord?.correctCount || 0;
 
   if (showResults) {
     return (
@@ -411,10 +430,6 @@ Example for "sprint":
       </div>
     );
   }
-
-  const currentQuestion = questions[currentQuestionIndex];
-  const currentWord = words.find(w => w.english === currentQuestion.word);
-  const correctCount = currentWord?.correctCount || 0;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
