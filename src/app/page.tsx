@@ -839,7 +839,7 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
         </div>
 
         {/* Control Buttons - Outside the Card */}
-        <div className="mt-4 md:mt-24 mb-4 flex flex-col items-center space-y-4">
+        <div className="mt-4 md:mt-48 mb-4 flex flex-col items-center space-y-4">
           {!currentCard.exampleSentence && !isLoading && (
             <button
               onClick={() => generateExampleSentence(currentCard.english)}
