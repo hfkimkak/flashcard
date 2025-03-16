@@ -46,21 +46,22 @@ export default function GrammarExam() {
     try {
       const prompt = `Generate a fill-in-the-blank question for the word "${word.english}". Return a JSON object with exactly this format:
 {
-  "sentence": "Write a sentence where ONLY '${word.english}' fits perfectly",
+  "sentence": "Write a sentence with __________ where the word should be. DO NOT include the word itself.",
   "wordType": "the part of speech (noun/verb/adjective/adverb)",
   "options": ["three", "different", "words"]
 }
 
 Rules:
-1. The sentence must be specific so that ONLY "${word.english}" is the correct answer
-2. The three options must:
+1. The sentence must be specific so that ONLY "${word.english}" fits perfectly
+2. Use exactly __________ (10 underscores) as the blank placeholder
+3. The three options must:
    - Be the same part of speech
    - NOT be synonyms of "${word.english}"
    - Be clearly incorrect in the context
 
 Example for "sprint":
 {
-  "sentence": "Athletes must sprint to finish the race quickly",
+  "sentence": "Athletes must __________ to finish the race quickly",
   "wordType": "verb",
   "options": ["sleep", "cry", "sing"]
 }`;
@@ -70,7 +71,7 @@ Example for "sprint":
         messages: [
           {
             role: 'system',
-            content: 'You are a quiz generator. Always respond with a valid JSON object containing exactly: sentence, wordType, and options (array of 3 strings).'
+            content: 'You are a quiz generator. Always respond with a valid JSON object containing exactly: sentence, wordType, and options (array of 3 strings). Never include the target word in the sentence.'
           },
           {
             role: 'user',
@@ -101,10 +102,35 @@ Example for "sprint":
           throw new Error('Invalid options array');
         }
 
-        // Ensure the target word is in the sentence
-        if (!result.sentence.toLowerCase().includes(word.english.toLowerCase())) {
-          result.sentence = `${result.sentence} ${word.english}`;
+        // Ensure sentence contains exactly 10 underscores as placeholder
+        const placeholder = '__________';
+        if (!result.sentence.includes(placeholder)) {
+          throw new Error('Sentence must contain exactly 10 underscores as placeholder');
         }
+
+        // Ensure the target word is not in the sentence
+        if (result.sentence.toLowerCase().includes(word.english.toLowerCase())) {
+          throw new Error('Sentence must not contain the target word');
+        }
+
+        // Find the position of the placeholder in the sentence
+        const words = result.sentence.split(' ');
+        const blankPosition = words.findIndex((w: string) => w.includes('__________'));
+
+        // Cümleyi temizle ve fazla boşlukları kaldır
+        const cleanSentence = result.sentence
+          .replace(/\s+/g, ' ')  // Birden fazla boşluğu tek boşluğa indir
+          .trim();               // Baş ve sondaki boşlukları kaldır
+
+        return {
+          sentence: cleanSentence,
+          word: word.english,
+          options: [...result.options, word.english].sort(() => Math.random() - 0.5),
+          correctAnswer: word.english,
+          wordType: result.wordType,
+          blankPosition: blankPosition !== -1 ? blankPosition : 0,
+          correctCount: word.correctCount || 0
+        };
       } catch (parseError) {
         console.error('Error parsing OpenAI response:', parseError);
         // More specific fallback response
