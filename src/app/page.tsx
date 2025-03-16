@@ -723,165 +723,162 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
         )}
 
         {/* Main Card Area */}
-        <div className="w-full max-w-md mx-auto mb-8">
-          {/* Kelime Kartı */}
-          <div className="section max-w-3xl mx-auto">
-            <div className="relative perspective-1000 mx-auto" style={{ maxWidth: "650px" }}>
-              {/* Navigasyon Butonları */}
-              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 flex justify-between px-4 z-10 pointer-events-none">
-                <button
-                  onClick={moveToPreviousCard}
-                  className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors pointer-events-auto"
-                >
-                  &#8592;
-                </button>
-                <button
-                  onClick={moveToNextCard}
-                  className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors pointer-events-auto"
-                >
-                  &#8594;
-                </button>
-              </div>
-
-              {/* Kelime Kartı */}
-              <div
-                className="relative w-full aspect-[4/3] cursor-pointer transition-transform duration-500 transform-style-3d mb-12"
-                onClick={() => setIsFlipped(!isFlipped)}
+        <div className="section max-w-3xl mx-auto">
+          <div className="relative perspective-1000 mx-auto mb-4 md:mb-12" style={{ maxWidth: "650px" }}>
+            {/* Navigasyon Butonları */}
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 flex justify-between px-4 z-10 pointer-events-none">
+              <button
+                onClick={moveToPreviousCard}
+                className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors pointer-events-auto"
               >
-                {/* Ön Yüz - İngilizce */}
-                <div
-                  className={`absolute w-full h-full flashcard backface-hidden ${
-                    isFlipped ? 'rotate-y-180' : 'rotate-y-0'
-                  }`}
-                >
-                  <div className="flex flex-col items-center justify-between w-full h-full p-6">
-                    <h2 className="flashcard-word mb-4">{currentCard.english}</h2>
-                    
-                    <div className="flex-grow overflow-auto w-full mb-2">
-                      {isLoading ? (
-                        <div className="mt-2 text-gray-500 flex items-center justify-center">
-                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Loading...
-                        </div>
-                      ) : currentCard.exampleSentence && showSentence ? (
-                        <div className="w-full">
-                          <div className="mb-2">
-                            <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 pl-2 text-left">
-                              {currentCard.exampleSentence.split('\n\n')
-                                .filter(section => section.includes('Örnekler:'))
-                                .flatMap(section => 
-                                  section.split('\n')
-                                    .filter(line => line.startsWith('-'))
-                                    .map(line => line.substring(1).trim())
-                                )
-                                .map((sentence, index) => (
-                                  <li key={index} className="italic">{sentence}</li>
-                                ))
-                              }
-                            </ul>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
+                &#8592;
+              </button>
+              <button
+                onClick={moveToNextCard}
+                className="w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors pointer-events-auto"
+              >
+                &#8594;
+              </button>
+            </div>
 
-                {/* Arka Yüz - Türkçe */}
-                <div
-                  className={`absolute w-full h-full flashcard backface-hidden rotate-y-180 ${
-                    isFlipped ? 'rotate-y-0' : 'rotate-y-180'
-                  }`}
-                >
-                  <div className="flex flex-col items-start text-left overflow-y-auto h-full p-6">
-                    <h2 className="flashcard-word text-center w-full mb-4">{currentCard.turkish}</h2>
-                    
-                    {currentCard.exampleSentence ? (
+            {/* Kelime Kartı */}
+            <div
+              className="relative w-full aspect-[4/3] cursor-pointer transition-transform duration-500 transform-style-3d"
+              onClick={() => setIsFlipped(!isFlipped)}
+            >
+              {/* Ön Yüz - İngilizce */}
+              <div
+                className={`absolute w-full h-full flashcard backface-hidden ${
+                  isFlipped ? 'rotate-y-180' : 'rotate-y-0'
+                }`}
+              >
+                <div className="flex flex-col items-center justify-between w-full h-full p-6">
+                  <h2 className="flashcard-word mb-4">{currentCard.english}</h2>
+                  
+                  <div className="flex-grow overflow-auto w-full mb-2">
+                    {isLoading ? (
+                      <div className="mt-2 text-gray-500 flex items-center justify-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Loading...
+                      </div>
+                    ) : currentCard.exampleSentence && showSentence ? (
                       <div className="w-full">
-                        <div className="mb-4">
-                          <p className="text-gray-700 text-sm leading-relaxed">
-                            <span className="font-bold">{currentCard.english}</span> kelimesi, {currentCard.turkish.toLowerCase()} anlamına gelir ve genellikle belirli bir bağlamda kullanılır. Bu terim, çeşitli durumlarda farklı anlamlar taşıyabilir.
-                          </p>
-                        </div>
-                        
-                        <div className="mb-4">
-                          <p className="font-semibold text-gray-800 mb-1">Anlamı:</p>
-                          <ol className="list-decimal list-inside text-sm text-gray-700 space-y-1 pl-2">
+                        <div className="mb-2">
+                          <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 pl-2 text-left">
                             {currentCard.exampleSentence.split('\n\n')
-                              .filter(section => section.includes('Anlamı:'))
+                              .filter(section => section.includes('Örnekler:'))
                               .flatMap(section => 
                                 section.split('\n')
-                                  .filter(line => /^\d+\./.test(line))
-                                  .map(line => line.replace(/^\d+\.\s*/, '').trim())
+                                  .filter(line => line.startsWith('-'))
+                                  .map(line => line.substring(1).trim())
                               )
-                              .map((meaning, index) => (
-                                <li key={index}>{meaning}</li>
+                              .map((sentence, index) => (
+                                <li key={index} className="italic">{sentence}</li>
                               ))
                             }
-                          </ol>
-                        </div>
-                        
-                        <div className="mb-4">
-                          <p className="font-semibold text-gray-800 mb-1">Özetle:</p>
-                          <p className="text-sm text-gray-700">
-                            {currentCard.exampleSentence.split('\n\n')
-                              .filter(section => section.includes('Özetle:'))
-                              .map(section => section.replace('Özetle:', '').trim())
-                              .join(' ')}
-                          </p>
+                          </ul>
                         </div>
                       </div>
                     ) : null}
                   </div>
                 </div>
               </div>
+
+              {/* Arka Yüz - Türkçe */}
+              <div
+                className={`absolute w-full h-full flashcard backface-hidden rotate-y-180 ${
+                  isFlipped ? 'rotate-y-0' : 'rotate-y-180'
+                }`}
+              >
+                <div className="flex flex-col items-start text-left overflow-y-auto h-full p-6">
+                  <h2 className="flashcard-word text-center w-full mb-4">{currentCard.turkish}</h2>
+                  
+                  {currentCard.exampleSentence ? (
+                    <div className="w-full">
+                      <div className="mb-4">
+                        <p className="text-gray-700 text-sm leading-relaxed">
+                          <span className="font-bold">{currentCard.english}</span> kelimesi, {currentCard.turkish.toLowerCase()} anlamına gelir ve genellikle belirli bir bağlamda kullanılır. Bu terim, çeşitli durumlarda farklı anlamlar taşıyabilir.
+                        </p>
+                      </div>
+                      
+                      <div className="mb-4">
+                        <p className="font-semibold text-gray-800 mb-1">Anlamı:</p>
+                        <ol className="list-decimal list-inside text-sm text-gray-700 space-y-1 pl-2">
+                          {currentCard.exampleSentence.split('\n\n')
+                            .filter(section => section.includes('Anlamı:'))
+                            .flatMap(section => 
+                              section.split('\n')
+                                .filter(line => /^\d+\./.test(line))
+                                .map(line => line.replace(/^\d+\.\s*/, '').trim())
+                            )
+                            .map((meaning, index) => (
+                              <li key={index}>{meaning}</li>
+                            ))
+                          }
+                        </ol>
+                      </div>
+                      
+                      <div className="mb-4">
+                        <p className="font-semibold text-gray-800 mb-1">Özetle:</p>
+                        <p className="text-sm text-gray-700">
+                          {currentCard.exampleSentence.split('\n\n')
+                            .filter(section => section.includes('Özetle:'))
+                            .map(section => section.replace('Özetle:', '').trim())
+                            .join(' ')}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             </div>
           </div>
+        </div>
 
-          {/* Control Buttons - Outside the Card */}
-          <div className="mt-24 mb-4 flex flex-col items-center space-y-4">
-            {!currentCard.exampleSentence && !isLoading && (
+        {/* Control Buttons - Outside the Card */}
+        <div className="mt-4 md:mt-24 mb-4 flex flex-col items-center space-y-4">
+          {!currentCard.exampleSentence && !isLoading && (
+            <button
+              onClick={() => generateExampleSentence(currentCard.english)}
+              className="w-full max-w-md px-3 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+            >
+              Generate Example
+            </button>
+          )}
+          
+          {currentCard.exampleSentence && !isLoading && (
+            <div className="flex gap-2 w-full max-w-md">
+              <button
+                onClick={() => setShowSentence(!showSentence)}
+                className="flex-1 px-3 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+              >
+                {showSentence ? 'Hide' : 'Show'}
+              </button>
               <button
                 onClick={() => generateExampleSentence(currentCard.english)}
-                className="w-full max-w-md px-3 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+                className="flex-1 px-3 py-1.5 text-sm bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
               >
-                Generate Example
-              </button>
-            )}
-            
-            {currentCard.exampleSentence && !isLoading && (
-              <div className="flex gap-2 w-full max-w-md">
-                <button
-                  onClick={() => setShowSentence(!showSentence)}
-                  className="flex-1 px-3 py-1.5 text-sm bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
-                >
-                  {showSentence ? 'Hide' : 'Show'}
-                </button>
-                <button
-                  onClick={() => generateExampleSentence(currentCard.english)}
-                  className="flex-1 px-3 py-1.5 text-sm bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
-                >
-                  New
-                </button>
-              </div>
-            )}
-
-            <div className="flex justify-center gap-2 w-full max-w-md mt-4">
-              <button
-                onClick={() => handleCardStatus('ok')}
-                className="flex-1 px-3 py-1.5 text-sm bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
-              >
-                Know
-              </button>
-              <button
-                onClick={() => handleCardStatus('practice')}
-                className="flex-1 px-3 py-1.5 text-sm bg-yellow-500 text-white rounded-full hover:bg-yellow-600 transition-colors"
-              >
-                Practice
+                New
               </button>
             </div>
+          )}
+
+          <div className="flex justify-center gap-2 w-full max-w-md mt-4">
+            <button
+              onClick={() => handleCardStatus('ok')}
+              className="flex-1 px-3 py-1.5 text-sm bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
+            >
+              Know
+            </button>
+            <button
+              onClick={() => handleCardStatus('practice')}
+              className="flex-1 px-3 py-1.5 text-sm bg-yellow-500 text-white rounded-full hover:bg-yellow-600 transition-colors"
+            >
+              Practice
+            </button>
           </div>
         </div>
 
