@@ -8,6 +8,7 @@ interface Word {
   turkish: string;
   status: 'new' | 'ok' | 'practice';
   exampleSentence?: string;
+  correctCount: number;
 }
 
 interface SavedList {
@@ -23,6 +24,7 @@ interface Question {
   correctAnswer: string;
   wordType: string;
   blankPosition: number;
+  correctCount: number;
 }
 
 export default function GrammarExam() {
@@ -131,18 +133,19 @@ Example for "sprint":
         options: [...result.options, word.english].sort(() => Math.random() - 0.5),
         correctAnswer: word.english,
         wordType: result.wordType,
-        blankPosition: blankPosition !== -1 ? blankPosition : 0
+        blankPosition: blankPosition !== -1 ? blankPosition : 0,
+        correctCount: word.correctCount || 0
       };
     } catch (error) {
       console.error('Error generating question:', error);
-      // More meaningful fallback
       return {
         sentence: `Please ${word.english} the instructions carefully.`,
         word: word.english,
         options: ['ignore', 'forget', 'skip', word.english].sort(() => Math.random() - 0.5),
         correctAnswer: word.english,
         wordType: 'verb',
-        blankPosition: 1
+        blankPosition: 1,
+        correctCount: word.correctCount || 0
       };
     }
   }, [openai]);
@@ -230,7 +233,65 @@ Example for "sprint":
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [currentQuestionIndex]);
 
+  const updateWordStatus = useCallback((words: Word[]) => {
+    const savedLists = localStorage.getItem('wordLists');
+    if (!savedLists) return;
+
+    const lists = JSON.parse(savedLists) as SavedList[];
+    const currentListName = localStorage.getItem('currentListName');
+    
+    const updatedLists = lists.map(list => {
+      const updatedCards = list.cards.map(card => {
+        const matchingWord = words.find(w => w.english === card.english);
+        if (matchingWord) {
+          // 5 kez doğru bilindiyse practice'den ok'a geçir
+          const newStatus = matchingWord.correctCount >= 5 ? 'ok' : card.status;
+          return {
+            ...card,
+            status: newStatus,
+            correctCount: matchingWord.correctCount
+          };
+        }
+        return card;
+      });
+      return { ...list, cards: updatedCards };
+    });
+
+    localStorage.setItem('wordLists', JSON.stringify(updatedLists));
+  }, []);
+
+  const getColorByCorrectCount = (count: number) => {
+    switch(count) {
+      case 1: return 'bg-blue-50';
+      case 2: return 'bg-blue-100';
+      case 3: return 'bg-blue-200';
+      case 4: return 'bg-blue-300';
+      case 5: return 'bg-green-200';
+      default: return 'bg-white';
+    }
+  };
+
   const finishExam = () => {
+    const updatedWords = [...words];
+    
+    // Her doğru cevap için correctCount'u güncelle
+    questions.forEach((question, index) => {
+      if (userAnswers[index] === question.correctAnswer) {
+        const wordIndex = updatedWords.findIndex(w => w.english === question.word);
+        if (wordIndex !== -1) {
+          updatedWords[wordIndex] = {
+            ...updatedWords[wordIndex],
+            correctCount: (updatedWords[wordIndex].correctCount || 0) + 1
+          };
+        }
+      }
+    });
+
+    // Word statülerini güncelle
+    updateWordStatus(updatedWords);
+    setWords(updatedWords);
+
+    // Skoru hesapla
     const correctAnswers = userAnswers.filter(
       (ans, index) => ans === questions[index].correctAnswer
     );
@@ -296,43 +357,37 @@ Example for "sprint":
             {questions.map((question, index) => {
               const userAnswer = userAnswers[index];
               const isCorrect = userAnswer === question.correctAnswer;
+              const word = words.find(w => w.english === question.word);
+              const correctCount = word?.correctCount || 0;
               
               return (
                 <div
                   key={index}
                   className={`p-6 rounded-lg ${
-                    isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                    isCorrect ? `${getColorByCorrectCount(correctCount)} border border-green-200` 
+                    : 'bg-red-50 border border-red-200'
                   }`}
                 >
                   <div className="mb-4">
                     <p className="text-gray-700 mb-2">
-                      {question.sentence.split(' ').map((word, i, arr) => {
-                        const isLast = i === arr.length - 1;
-                        return i === question.blankPosition ? (
-                          <span key={i}>
-                            {isCorrect ? (
-                              <span className="text-green-600 font-bold mx-1">{userAnswer}</span>
-                            ) : (
-                              <span className="text-red-600 font-bold mx-1">{userAnswer}</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span key={i}>{word}{!isLast ? ' ' : ''}</span>
-                        );
-                      })}
+                      {question.sentence}
                     </p>
                   </div>
 
-                  {!isCorrect && (
-                    <div className="text-sm">
-                      <p className="text-red-600">
-                        Sizin cevabınız: {userAnswer}
-                      </p>
+                  <div className="text-sm">
+                    <p className={isCorrect ? 'text-green-600' : 'text-red-600'}>
+                      Sizin cevabınız: {userAnswer || 'Boş bırakıldı'}
+                    </p>
+                    {!isCorrect && (
                       <p className="text-green-600">
                         Doğru cevap: {question.correctAnswer}
                       </p>
-                    </div>
-                  )}
+                    )}
+                    <p className="text-gray-600 mt-2">
+                      Bu kelimeyi {correctCount} kez doğru bildiniz
+                      {correctCount >= 5 && ' (Öğrenildi!)'}
+                    </p>
+                  </div>
                 </div>
               );
             })}
@@ -358,6 +413,8 @@ Example for "sprint":
   }
 
   const currentQuestion = questions[currentQuestionIndex];
+  const currentWord = words.find(w => w.english === currentQuestion.word);
+  const correctCount = currentWord?.correctCount || 0;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -380,10 +437,15 @@ Example for "sprint":
         </div>
 
         <div className="mb-8">
-          <div className="p-6 bg-gray-50 rounded-lg mb-4">
+          <div className={`p-6 rounded-lg mb-4 ${getColorByCorrectCount(correctCount)}`}>
             <p className="text-lg text-center">
               {currentQuestion.sentence}
             </p>
+            {correctCount > 0 && (
+              <p className="text-sm text-gray-600 text-center mt-2">
+                Bu kelimeyi {correctCount} kez doğru bildiniz
+              </p>
+            )}
           </div>
         </div>
 
