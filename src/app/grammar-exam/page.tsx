@@ -203,17 +203,39 @@ Example for "sprint":
     const newAnswers = [...userAnswers];
     newAnswers[currentQuestionIndex] = answer;
     setUserAnswers(newAnswers);
+  };
 
+  const goToNextQuestion = () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
-    } else {
-      // Calculate score
-      const correctAnswers = newAnswers.filter(
-        (ans, index) => ans === questions[index].correctAnswer
-      );
-      setScore(correctAnswers.length);
-      setShowResults(true);
     }
+  };
+
+  const goToPreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowRight') {
+        goToNextQuestion();
+      } else if (event.key === 'ArrowLeft') {
+        goToPreviousQuestion();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [currentQuestionIndex]);
+
+  const finishExam = () => {
+    const correctAnswers = userAnswers.filter(
+      (ans, index) => ans === questions[index].correctAnswer
+    );
+    setScore(correctAnswers.length);
+    setShowResults(true);
   };
 
   const restartExam = async () => {
@@ -360,28 +382,55 @@ Example for "sprint":
         <div className="mb-8">
           <div className="p-6 bg-gray-50 rounded-lg mb-4">
             <p className="text-lg text-center">
-              {currentQuestion.sentence.split(' ').map((word, i, arr) => {
-                const isLast = i === arr.length - 1;
-                return i === currentQuestion.blankPosition ? (
-                  <span key={i} className="border-b-2 border-blue-500 px-2 mx-1">____</span>
-                ) : (
-                  <span key={i}>{word}{!isLast ? ' ' : ''}</span>
-                );
-              })}
+              {currentQuestion.sentence}
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 gap-4 mb-8">
           {currentQuestion.options.map((option, index) => (
             <button
               key={index}
               onClick={() => handleAnswer(option)}
-              className="w-full p-4 text-left rounded-lg border-2 hover:border-blue-500 hover:bg-blue-50 transition-all duration-200"
+              className={`w-full p-4 text-left rounded-lg border-2 
+                ${userAnswers[currentQuestionIndex] === option 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'hover:border-blue-500 hover:bg-blue-50'} 
+                transition-all duration-200`}
             >
               {option}
             </button>
           ))}
+        </div>
+
+        <div className="flex justify-between items-center mt-6">
+          <button
+            onClick={goToPreviousQuestion}
+            className={`px-4 py-2 rounded-lg ${
+              currentQuestionIndex === 0
+                ? 'bg-gray-300 cursor-not-allowed'
+                : 'bg-blue-500 hover:bg-blue-600 text-white'
+            }`}
+            disabled={currentQuestionIndex === 0}
+          >
+            ← Önceki Soru
+          </button>
+
+          {currentQuestionIndex === questions.length - 1 ? (
+            <button
+              onClick={finishExam}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+            >
+              Sınavı Bitir
+            </button>
+          ) : (
+            <button
+              onClick={goToNextQuestion}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              Sonraki Soru →
+            </button>
+          )}
         </div>
       </div>
     </div>
