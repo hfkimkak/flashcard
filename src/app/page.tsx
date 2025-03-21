@@ -281,31 +281,38 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
   };
 
   const moveToNextCard = () => {
+    // First get current study mode cards
     const availableCards = cards.filter(card => card.status === studyMode);
+    
+    // If no cards available, return
+    if (availableCards.length === 0) return;
+    
+    // Find current card index in filtered list
     const currentIndexInFiltered = availableCards.findIndex(
       card => card.english === currentCard.english && card.turkish === currentCard.turkish
     );
-
-    if (availableCards.length === 0) return;
-
+    
+    // Debug logging to help identify issues
+    console.log(`Total ${studyMode} cards: ${availableCards.length}, Current index: ${currentIndexInFiltered}`);
+    
+    // Calculate next index
     let nextIndex = currentIndexInFiltered + 1;
+    
+    // If we've reached the end of the list, show alert and reset to beginning
     if (nextIndex >= availableCards.length) {
-      // Listenin sonuna geldiğimizde başa dönmek yerine, 
-      // kullanıcıya listenin sonuna geldiğini bildirelim
-      if (availableCards.length > 0) {
-        // Eğer hala kartlar varsa, kullanıcıya listenin sonuna geldiğini bildiren bir mesaj gösterelim
-        alert("Çalışma listesinin sonuna geldiniz. Başa dönmek için 'OK' tuşuna basın.");
-        // Kullanıcı isterse başa dönebilir
+      alert(`Çalışma listesinin sonuna geldiniz. Listede toplam ${availableCards.length} kelime var. Başa dönmek için 'OK' tuşuna basın.`);
       nextIndex = 0;
-      } else {
-        return; // Hiç kart yoksa işlem yapma
-      }
     }
-
+    
+    // Get the next card
     const nextCard = availableCards[nextIndex];
+    
+    // Find index in the original cards array
     const nextCardIndex = cards.findIndex(
       card => card.english === nextCard.english && card.turkish === nextCard.turkish
     );
+    
+    // Update state
     setCurrentCardIndex(nextCardIndex);
     setCurrentCard(nextCard);
     setIsFlipped(false);
@@ -314,30 +321,38 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
 
   const handleCardStatus = (status: 'ok' | 'practice') => {
     try {
-      // Kart listesi boşsa işlem yapma
+      // Check if cards list is empty
       if (cards.length === 0) return;
 
-      // Geçerli kart indeksi kontrolü
+      // Validate current card index
       if (currentCardIndex < 0 || currentCardIndex >= cards.length) {
         console.error('Invalid card index:', currentCardIndex);
         return;
       }
 
+      console.log(`Changing card status: "${currentCard.english}" from ${currentCard.status} to ${status}`);
+      console.log(`Current mode: ${studyMode}, Total cards: ${cards.length}`);
+      
+      // Create a copy of cards array and update the current card's status
       const updatedCards = [...cards];
       updatedCards[currentCardIndex] = {
         ...updatedCards[currentCardIndex],
         status: status
       };
       
+      // Update cards state
       setCards(updatedCards);
       setShowSentence(false);
 
-      // Kartları filtreleyip bir sonraki kartı seçme
+      // Filter cards with the current study mode
       const availableCards = updatedCards.filter(card => card.status === studyMode);
+      console.log(`Available cards after status change: ${availableCards.length}`);
       
-      // Eğer mevcut modda hiç kart kalmadıysa, diğer moda geç
+      // If no cards left in current mode, switch to other mode
       if (availableCards.length === 0) {
         const otherMode = studyMode === 'new' ? 'practice' : 'new';
+        console.log(`No cards left in ${studyMode} mode, switching to ${otherMode} mode`);
+        
         const otherModeCards = updatedCards.filter(card => card.status === otherMode);
         
         if (otherModeCards.length > 0) {
@@ -350,9 +365,11 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
           if (firstCardIndex !== -1) {
             setCurrentCardIndex(firstCardIndex);
             setCurrentCard(firstCard);
+            console.log(`Switched to first card in ${otherMode} mode: "${firstCard.english}"`);
           }
         } else {
-          // Hiç kart kalmadıysa başlangıç durumuna dön
+          // No cards left in either mode
+          console.log('No cards left in either mode');
           const defaultCard: Flashcard = {
             english: 'Tüm kartlar tamamlandı',
             turkish: 'Yeni bir liste yükleyin',
@@ -365,44 +382,57 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
         return;
       }
 
-      // Mevcut kartın filtrelenmiş listedeki indeksini bul
-      const currentIndexInFiltered = availableCards.findIndex(
-        card => card.english === currentCard.english && card.turkish === currentCard.turkish
-      );
-
-      // Bir sonraki kartın indeksini hesapla
+      // Find current card's index in the filtered list
+      let currentIndexInFiltered = -1;
+      if (status === studyMode) {
+        // If we kept the card in the same mode, it's still in the filtered list
+        currentIndexInFiltered = availableCards.findIndex(
+          card => card.english === currentCard.english && card.turkish === currentCard.turkish
+        );
+      }
+      
+      // Determine the next card to show
       let nextIndex = 0;
+      
       if (currentIndexInFiltered !== -1) {
-        // Eğer mevcut kart filtrelenmiş listede bulunuyorsa, bir sonraki kartı seç
+        // If current card is still in the filtered list, move to the next one
         nextIndex = (currentIndexInFiltered + 1) % availableCards.length;
+        console.log(`Current card still in list, moving to next, index: ${nextIndex}`);
       } else {
-        // Eğer mevcut kart artık filtrelenmiş listede değilse (örneğin OK'e taşındıysa),
-        // kaldığı yerden devam et, başa dönme
-        // Mevcut kartın orijinal listedeki indeksini bul
+        // Current card was moved to a different status (removed from this mode)
+        console.log(`Current card was moved to ${status} mode, finding next card`);
+        
+        // Find the original index of the current card
         const originalIndex = updatedCards.findIndex(
           card => card.english === currentCard.english && card.turkish === currentCard.turkish
         );
         
-        // Orijinal listedeki bu indeksten sonraki, studyMode'a uygun ilk kartı bul
+        // Look for the next card in the original list with the current study mode
         let foundNextCard = false;
         for (let i = originalIndex + 1; i < updatedCards.length; i++) {
           if (updatedCards[i].status === studyMode) {
-            nextIndex = availableCards.findIndex(
+            // Find this card's index in the filtered list
+            const filteredIndex = availableCards.findIndex(
               card => card.english === updatedCards[i].english && card.turkish === updatedCards[i].turkish
             );
-            foundNextCard = true;
-            break;
+            
+            if (filteredIndex !== -1) {
+              nextIndex = filteredIndex;
+              foundNextCard = true;
+              console.log(`Found next card: "${updatedCards[i].english}" at index ${i}`);
+              break;
+            }
           }
         }
         
-        // Eğer sonraki kartlar arasında uygun bir kart bulunamadıysa, 
-        // listenin başından itibaren ara (bu sadece bir güvenlik önlemi)
+        // If no cards found after current one, start from the beginning
         if (!foundNextCard) {
+          console.log('No next card found, starting from beginning');
           nextIndex = 0;
         }
       }
 
-      // Bir sonraki kartı seç
+      // Get the next card and update state
       const nextCard = availableCards[nextIndex];
       if (nextCard) {
         const nextCardIndex = updatedCards.findIndex(
@@ -411,12 +441,13 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
         if (nextCardIndex !== -1) {
           setCurrentCardIndex(nextCardIndex);
           setCurrentCard(nextCard);
+          console.log(`Moving to next card: "${nextCard.english}"`);
         }
       }
+      
       setIsFlipped(false);
     } catch (error) {
       console.error('Error in handleCardStatus:', error);
-      // Hata durumunda güvenli bir duruma dön
       if (cards.length > 0) {
         setCurrentCard(cards[0]);
         setCurrentCardIndex(0);
@@ -598,22 +629,38 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
 
   // Önceki karta geçiş fonksiyonu
   const moveToPreviousCard = () => {
+    // Get current study mode cards
     const availableCards = cards.filter(card => card.status === studyMode);
+    
+    // If no cards available, return
+    if (availableCards.length === 0) return;
+    
+    // Find current card index in filtered list
     const currentIndexInFiltered = availableCards.findIndex(
       card => card.english === currentCard.english && card.turkish === currentCard.turkish
     );
-
-    if (availableCards.length === 0) return;
-
+    
+    // Debug logging to help identify issues
+    console.log(`Total ${studyMode} cards: ${availableCards.length}, Current index: ${currentIndexInFiltered}`);
+    
+    // Calculate previous index
     let prevIndex = currentIndexInFiltered - 1;
+    
+    // If we've reached the beginning of the list, loop back to the end
     if (prevIndex < 0) {
+      console.log('At beginning of list, moving to the end');
       prevIndex = availableCards.length - 1;
     }
-
+    
+    // Get the previous card
     const prevCard = availableCards[prevIndex];
+    
+    // Find index in the original cards array
     const prevCardIndex = cards.findIndex(
       card => card.english === prevCard.english && card.turkish === prevCard.turkish
     );
+    
+    // Update state
     setCurrentCardIndex(prevCardIndex);
     setCurrentCard(prevCard);
     setIsFlipped(false);
@@ -659,6 +706,46 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
     setEditedTurkish('');
   };
 
+  const shuffleCards = () => {
+    try {
+      console.log("Shuffling cards in current study mode:", studyMode);
+      
+      // Get cards with current study mode
+      const availableCards = cards.filter(card => card.status === studyMode);
+      console.log(`Found ${availableCards.length} cards to shuffle`);
+      
+      if (availableCards.length <= 1) {
+        alert(`Karıştırılacak yeterli kart yok. Sadece ${availableCards.length} kart var.`);
+        return;
+      }
+      
+      // Shuffle the filtered cards
+      const shuffledCards = shuffleArray([...availableCards]);
+      console.log("Cards shuffled successfully");
+      
+      // Pick the first card from the shuffled list to display
+      if (shuffledCards.length > 0) {
+        const randomCard = shuffledCards[0];
+        const randomCardIndex = cards.findIndex(
+          card => card.english === randomCard.english && card.turkish === randomCard.turkish
+        );
+        
+        if (randomCardIndex !== -1) {
+          console.log(`Setting current card to: "${randomCard.english}"`);
+          setCurrentCardIndex(randomCardIndex);
+          setCurrentCard(randomCard);
+          setIsFlipped(false);
+          setShowSentence(false);
+          
+          alert(`Kartlar karıştırıldı. Toplam ${availableCards.length} kart. Rastgele bir karttan başlandı.`);
+        }
+      }
+    } catch (error) {
+      console.error("Error shuffling cards:", error);
+      alert("Kartları karıştırırken bir hata oluştu.");
+    }
+  };
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-blue-100 to-white p-4">
       <div className="w-full max-w-4xl">
@@ -691,7 +778,7 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
                 Pratik Kelimeler ({practiceWords.length})
               </button>
               <button
-                onClick={moveToNextCard}
+                onClick={shuffleCards}
                 className="px-3 py-1.5 text-sm bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors"
               >
                 Karıştır
@@ -724,6 +811,21 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
 
         {/* Main Card Area */}
         <div className="section max-w-3xl mx-auto">
+          {/* Card Position Indicator */}
+          {cards.length > 0 && (
+            <div className="text-center mb-2">
+              <span className="inline-block px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700">
+                {(() => {
+                  const availableCards = cards.filter(card => card.status === studyMode);
+                  const currentIndex = availableCards.findIndex(
+                    card => card.english === currentCard.english && card.turkish === currentCard.turkish
+                  );
+                  return `Kart ${currentIndex + 1} / ${availableCards.length}`;
+                })()}
+              </span>
+            </div>
+          )}
+          
           <div className="relative perspective-1000 mx-auto mb-4 md:mb-12" style={{ maxWidth: "650px" }}>
             {/* Navigasyon Butonları */}
             <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 flex justify-between px-4 z-10 pointer-events-none">
