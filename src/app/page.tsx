@@ -53,6 +53,7 @@ export default function Home() {
   const [editingWord, setEditingWord] = useState<Flashcard | null>(null);
   const [editedEnglish, setEditedEnglish] = useState('');
   const [editedTurkish, setEditedTurkish] = useState('');
+  const [seenCardCache, setSeenCardCache] = useState<Set<string>>(new Set());
 
   const openai = useMemo(() => new OpenAI({
     apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
@@ -405,16 +406,30 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
       // Debug logging to help identify issues
       console.log(`Total ${studyMode} cards: ${availableCards.length}, Current index in filtered: ${currentIndexInFiltered}`);
       
-      // If current card is not in the filtered list, start from the beginning
+      // If current card is not in the filtered list, find an appropriate next card
       let nextIndex = 0;
+
       if (currentIndexInFiltered !== -1) {
-        // Calculate next index only if current card was found
+        // Mevcut kart bulundu, normal şekilde sonraki indeksi hesapla
         nextIndex = (currentIndexInFiltered + 1) % availableCards.length;
         console.log(`Next index calculation: (${currentIndexInFiltered} + 1) % ${availableCards.length} = ${nextIndex}`);
         
-        // If we've reached the end of the list, show alert
+        // Listenin sonuna geldiğimizi bildirmek için
         if (nextIndex === 0 && availableCards.length > 1) {
-          alert(`Çalışma listesinin sonuna geldiniz. Listede toplam ${availableCards.length} kelime var. Başa dönüyorsunuz.`);
+          // Tüm kartlar gezildiyse bildir ve cache'i temizle
+          const cardKey = `${currentCard.english}-${currentCard.turkish}`;
+          const newCache = new Set(seenCardCache);
+          newCache.add(cardKey);
+          
+          if (newCache.size >= availableCards.length) {
+            alert(`Tüm kartları tamamladınız! Listede toplam ${availableCards.length} kelime var. Başa dönüyorsunuz.`);
+            // Kartları gördüğümüz cache'i sıfırla
+            setSeenCardCache(new Set());
+          } else {
+            alert(`Çalışma listesinin sonuna geldiniz. Listede toplam ${availableCards.length} kelime var. Başa dönüyorsunuz.`);
+            // Sadece mevcut kartı ekle
+            setSeenCardCache(newCache);
+          }
         }
       } else {
         console.log(`Current card not found in ${studyMode} mode, starting from the beginning`);
@@ -428,6 +443,12 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
       }
       
       console.log(`Selected next card: "${nextCard.english}" (${nextCard.turkish})`);
+      
+      // Ziyaret edilen kartları takip et
+      const cardKey = `${nextCard.english}-${nextCard.turkish}`;
+      const newCache = new Set(seenCardCache);
+      newCache.add(cardKey);
+      setSeenCardCache(newCache);
       
       // Find index in the original cards array
       const nextCardIndex = cards.findIndex(card => {
@@ -627,78 +648,92 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
   };
 
   const switchStudyMode = (mode: 'new' | 'practice') => {
-    console.log(`Switching study mode to: ${mode}`);
-    setStudyMode(mode);
+    // Eğer zaten bu moddaysak, işlem yapma
+    if (mode === studyMode) {
+      console.log(`Already in ${mode} mode, no switch needed`);
+      return;
+    }
     
+    console.log(`Switching study mode to: ${mode}`);
+    
+    // Modu güncellemeden önce kullanılabilir kartları kontrol et
     const availableCards = cards.filter(card => card.status === mode);
     console.log(`Found ${availableCards.length} available cards in ${mode} mode`);
     
-    if (availableCards.length > 0) {
-      // Kullanıcıya baştan başlamak isteyip istemediğini soralım
-      const startFromBeginning = confirm(
-        `${mode === 'new' ? 'Yeni' : 'Pratik'} çalışma moduna geçtiniz. Baştan başlamak ister misiniz? 'İptal'e basarsanız, kaldığınız yerden devam edeceksiniz.`
-      );
-      
-      // Başlangıçta bir kart seç (varsayılan olarak ilk kart)
-      let selectedCard: Flashcard = availableCards[0];
-      let selectedCardIndex: number = 0;
-      
-      if (startFromBeginning) {
-        // Baştan başla
-        selectedCard = availableCards[0];
-        console.log(`Starting from beginning with card: "${selectedCard.english}"`);
-      } else {
-        // Mevcut kartın indeksini bul
-        const currentOriginalIndex = cards.findIndex(
-          card => card.english === currentCard.english && card.turkish === currentCard.turkish
-        );
-        
-        console.log(`Current card index in original list: ${currentOriginalIndex}`);
-        
-        // Mevcut karttan sonraki, seçilen moda uygun ilk kartı bul
-        let foundNextCard = false;
-        for (let i = currentOriginalIndex + 1; i < cards.length; i++) {
-          if (cards[i].status === mode) {
-            selectedCard = cards[i];
-            foundNextCard = true;
-            console.log(`Found next card after current position: "${selectedCard.english}" at index ${i}`);
-            break;
-          }
-        }
-        
-        // Eğer sonraki kartlar arasında uygun bir kart bulunamadıysa, 
-        // listenin başından itibaren ilk uygun kartı seç
-        if (!foundNextCard) {
-          selectedCard = availableCards[0];
-          console.log(`No suitable card found after current position, starting from beginning with: "${selectedCard.english}"`);
-        }
-      }
-      
-      // Seçilen kartı ayarla
-      selectedCardIndex = cards.findIndex(
-        card => card.english === selectedCard.english && card.turkish === selectedCard.turkish
-      );
-      
-      console.log(`Selected card index in original list: ${selectedCardIndex}`);
-      
-      if (selectedCardIndex === -1) {
-        console.error("Selected card not found in the main array");
-        // Güvenlik önlemi: İlk kartı seç
-        selectedCard = availableCards[0];
-        selectedCardIndex = cards.findIndex(
-          card => card.english === selectedCard.english && card.turkish === selectedCard.turkish
-        );
-        console.log(`Fallback to first card: "${selectedCard.english}" at index ${selectedCardIndex}`);
-      }
-      
-      setCurrentCardIndex(selectedCardIndex);
-      setCurrentCard(selectedCard);
-      setIsFlipped(false);
-      setShowSentence(false);
-    } else {
+    if (availableCards.length === 0) {
       console.log(`No cards available in ${mode} mode`);
       alert(`${mode === 'new' ? 'Yeni' : 'Pratik'} modda çalışacak kelime bulunamadı.`);
+      return;
     }
+    
+    // Mod değişimini apply et
+    setStudyMode(mode);
+    setSeenCardCache(new Set()); // Görülen kartları temizle
+    
+    // Kullanıcıya baştan başlamak isteyip istemediğini soralım
+    const startFromBeginning = confirm(
+      `${mode === 'new' ? 'Yeni' : 'Pratik'} çalışma moduna geçtiniz. Baştan başlamak ister misiniz? 'İptal'e basarsanız, kaldığınız yerden devam edeceksiniz.`
+    );
+    
+    // Başlangıçta bir kart seç (varsayılan olarak ilk kart)
+    let selectedCard: Flashcard = availableCards[0];
+    let selectedCardIndex: number = 0;
+    
+    if (startFromBeginning) {
+      // Baştan başla
+      selectedCard = availableCards[0];
+      console.log(`Starting from beginning with card: "${selectedCard.english}"`);
+    } else {
+      // Mevcut kartın indeksini bul
+      const currentOriginalIndex = cards.findIndex(
+        card => card.english.toLowerCase() === currentCard.english.toLowerCase() && 
+        card.turkish.toLowerCase() === currentCard.turkish.toLowerCase()
+      );
+      
+      console.log(`Current card index in original list: ${currentOriginalIndex}`);
+      
+      // Mevcut karttan sonraki, seçilen moda uygun ilk kartı bul
+      let foundNextCard = false;
+      for (let i = currentOriginalIndex + 1; i < cards.length; i++) {
+        if (cards[i].status === mode) {
+          selectedCard = cards[i];
+          foundNextCard = true;
+          console.log(`Found next card after current position: "${selectedCard.english}" at index ${i}`);
+          break;
+        }
+      }
+      
+      // Eğer sonraki kartlar arasında uygun bir kart bulunamadıysa, 
+      // listenin başından itibaren ilk uygun kartı seç
+      if (!foundNextCard) {
+        selectedCard = availableCards[0];
+        console.log(`No suitable card found after current position, starting from beginning with: "${selectedCard.english}"`);
+      }
+    }
+    
+    // Seçilen kartı ayarla
+    selectedCardIndex = cards.findIndex(card => 
+      card.english.toLowerCase() === selectedCard.english.toLowerCase() && 
+      card.turkish.toLowerCase() === selectedCard.turkish.toLowerCase()
+    );
+    
+    console.log(`Selected card index in original list: ${selectedCardIndex}`);
+    
+    if (selectedCardIndex === -1) {
+      console.error("Selected card not found in the main array");
+      // Güvenlik önlemi: İlk kartı seç
+      selectedCard = availableCards[0];
+      selectedCardIndex = cards.findIndex(card =>
+        card.english.toLowerCase() === selectedCard.english.toLowerCase() && 
+        card.turkish.toLowerCase() === selectedCard.turkish.toLowerCase()
+      );
+      console.log(`Fallback to first card: "${selectedCard.english}" at index ${selectedCardIndex}`);
+    }
+    
+    setCurrentCardIndex(selectedCardIndex);
+    setCurrentCard(selectedCard);
+    setIsFlipped(false);
+    setShowSentence(false);
   };
 
   // Add these new computed values
@@ -980,6 +1015,11 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
     }
   };
 
+  // StudyMode değiştiğinde, seenCardCache'i temizle
+  useEffect(() => {
+    setSeenCardCache(new Set());
+  }, [studyMode]);
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-blue-100 to-white p-4">
       <div className="w-full max-w-4xl">
@@ -1052,7 +1092,8 @@ Lütfen her bir anlam için farklı bağlamlarda örnek cümleler oluşturun ve 
                 {(() => {
                   const availableCards = cards.filter(card => card.status === studyMode);
                   const currentIndex = availableCards.findIndex(
-                    card => card.english === currentCard.english && card.turkish === currentCard.turkish
+                    card => card.english.toLowerCase() === currentCard.english.toLowerCase() && 
+                           card.turkish.toLowerCase() === currentCard.turkish.toLowerCase()
                   );
                   
                   if (currentIndex === -1) {
